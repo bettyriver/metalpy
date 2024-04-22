@@ -24,7 +24,7 @@ class PreBlobby3D:
     
     def __init__(
             self, dirpath, fitsname, emipath, eminame, redshift_path, save_path,
-            conti_path=None, wave_axis=0):
+            emi_line, conti_path=None, wave_axis=0):
         """
         
 
@@ -40,7 +40,10 @@ class PreBlobby3D:
             DESCRIPTION.
         wave_axis : TYPE, optional
             DESCRIPTION. The default is 0.
-
+        emi_line: Ha or Oii
+        
+        
+        
         Raises
         ------
         ValueError
@@ -114,6 +117,7 @@ class PreBlobby3D:
         self.conti_path = conti_path
         conti_fits = fits.open(conti_path)
         self.conti_spec = conti_fits[3].data - conti_fits[4].data
+        self.emi_line = emi_line
             
     
     def plot_interg_flux(self,snlim,xlim=None, ylim=None, mask_dilated_mask=True, **kwargs):
@@ -467,7 +471,7 @@ class PreBlobby3D:
         plt.plot(data3d[ypix,xpix,:])
         plt.show()
 
-    def model_options(self,inc_path,emi_line,flat_vdisp=True,psfimg=True,gaussian=2):
+    def model_options(self,inc_path,flat_vdisp=True,psfimg=True,gaussian=2):
         
         
         '''emi_line: Ha or Oii
@@ -475,11 +479,11 @@ class PreBlobby3D:
         
         '''
         
-        if emi_line =='Ha':
+        if self.emi_line =='Ha':
             emi_line_wave = 6563
             # z-band, is most close to Halpha line at z~0.3
             emi_line_psfband = 3
-        elif emi_line == 'Oii':
+        elif self.emi_line == 'Oii':
             # oii 3727 and oii 3729, choose a wavelength in between
             emi_line_wave = 3728
             # g-band, is most close to OII line at z~0.3
@@ -546,10 +550,10 @@ class PreBlobby3D:
             inc = np.arccos(0)
         
         modelfile.write('INC\t%f\n'%(inc))
-        if emi_line =='Ha':
+        if self.emi_line =='Ha':
             modelfile.write('LINE\t6562.81\n')
             modelfile.write('LINE\t6583.1\t6548.1\t0.333\n')
-        elif emi_line == 'Oii':
+        elif self.emi_line == 'Oii':
             modelfile.write('LINE\t3726.1\n')
             modelfile.write('LINE\t3728.8\n')
         
@@ -568,20 +572,38 @@ class PreBlobby3D:
         
         ha_sn_1d = ha_sn_masked.flatten()
         npixel = sum(ha_sn_1d >= 3)
-        if npixel <= 300:
-            iterations = 5000
-        elif npixel <= 400:
-            iterations = 7000
-        elif npixel <= 500:
-            iterations = 9000
-        elif npixel <= 800:
-            iterations = 11000
-        elif npixel <= 1000:
-            iterations = 15000
-        elif npixel <= 3000:
-            iterations = 20000
-        else:
-            iterations = 25000
+        
+        
+        if self.emi_line == 'Ha':
+            if npixel <= 300:
+                iterations = 5000
+            elif npixel <= 400:
+                iterations = 7000
+            elif npixel <= 500:
+                iterations = 9000
+            elif npixel <= 800:
+                iterations = 11000
+            elif npixel <= 1000:
+                iterations = 15000
+            elif npixel <= 3000:
+                iterations = 20000
+            else:
+                iterations = 25000
+        elif self.emi_line=='Oii':
+            if npixel <= 300:
+                iterations = 5000
+            elif npixel <= 400:
+                iterations = 7000
+            elif npixel <= 500:
+                iterations = 9000
+            elif npixel <= 800:
+                iterations = 11000
+            elif npixel <= 1000:
+                iterations = 13000
+            elif npixel <= 3000:
+                iterations = 15000
+            else:
+                iterations = 20000
         
         modelfile.write('# File containing parameters for DNest4\n')
         modelfile.write('# Put comments at the top, or at the end of the line.\n')
