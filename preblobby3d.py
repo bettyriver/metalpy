@@ -467,13 +467,35 @@ class PreBlobby3D:
         plt.plot(data3d[ypix,xpix,:])
         plt.show()
 
-    def model_options(self,inc_path,flat_vdisp=True,psfimg=True,band='z',gaussian=2):
+    def model_options(self,inc_path,emi_line,flat_vdisp=True,psfimg=True,gaussian=2):
+        
+        
+        '''emi_line: Ha or Oii
+        
+        
+        '''
+        
+        if emi_line =='Ha':
+            emi_line_wave = 6563
+            # z-band, is most close to Halpha line at z~0.3
+            emi_line_psfband = 3
+        elif emi_line == 'Oii':
+            # oii 3727 and oii 3729, choose a wavelength in between
+            emi_line_wave = 3728
+            # g-band, is most close to OII line at z~0.3
+            emi_line_psfband = 0
+        
+        
+        
+        
+        
+        
         modelfile = open(self.save_path+"MODEL_OPTIONS","w")
         # first line
         modelfile.write('# Specify model options\n')
         # LSFFWHM
         # reconstruct return sigma
-        lsf_recon = reconstruct_lsf(wavelengths=6563*(1+self.magpiredshift), 
+        lsf_recon = reconstruct_lsf(wavelengths=emi_line_wave*(1+self.magpiredshift), 
                         resolution_file=self.dirpath + self.fitsname)
         lsf_deredshift = lsf_recon/(1+self.magpiredshift)
         lsf_fwhm = 2*np.sqrt(2*np.log(2))*lsf_deredshift
@@ -481,7 +503,7 @@ class PreBlobby3D:
         
         if psfimg==True:
             # default z-band
-            img = self.fitsdata[4].data[3]
+            img = self.fitsdata[4].data[emi_line_psfband]
             
             if gaussian==2:
                 weight1, weight2, fwhm1, fwhm2 = mofgauFit.psf_img_to_gauss(img)
@@ -524,8 +546,14 @@ class PreBlobby3D:
             inc = np.arccos(0)
         
         modelfile.write('INC\t%f\n'%(inc))
-        modelfile.write('LINE\t6562.81\n')
-        modelfile.write('LINE\t6583.1\t6548.1\t0.333\n')
+        if emi_line =='Ha':
+            modelfile.write('LINE\t6562.81\n')
+            modelfile.write('LINE\t6583.1\t6548.1\t0.333\n')
+        elif emi_line == 'Oii':
+            modelfile.write('LINE\t3726.1\n')
+            modelfile.write('LINE\t3728.8\n')
+        
+        
         if flat_vdisp == True:
             modelfile.write('VDISPN_SIGMA\t1.000000e-09\n')
         
