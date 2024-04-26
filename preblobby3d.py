@@ -61,6 +61,15 @@ class PreBlobby3D:
         self.emipath_w = emipath+eminame
         self.ha_flux = self.emidata['Ha_F'].data # extension 47
         self.ha_err = self.emidata['Ha_FERR'].data# extension 48
+        
+        # oii flux and ferr from emidata
+        oii_3727_f = self.emidata['OII_3727_F'].data
+        oii_3727_ferr = self.emidata['OII_3727_FERR'].data
+        oii_3730_f = self.emidata['OII_3730_F'].data
+        oii_3730_ferr = self.emidata['OII_3730_FERR'].data
+        self.oii_sum_flux = oii_3727_f + oii_3730_f
+        self.oii_sum_ferr = np.sqrt(oii_3727_ferr**2+oii_3730_ferr**2)
+        
         self.dilated_mask = self.emidata['DILATED_MASK'].data
         self.ha_sn = self.ha_flux/self.ha_err
         
