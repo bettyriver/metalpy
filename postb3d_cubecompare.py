@@ -57,7 +57,7 @@ def plot_cubecompare(datapath,emi_line,emi_sn_path,mode='random'):
         
     elif emi_line == 'Oii':
         sm = SpectralModel(
-                lines=[[3726.1], [3728.8]],
+                lines=[[3727.092], [3729.875]],
                 lsf_fwhm=0.846,)
         
         

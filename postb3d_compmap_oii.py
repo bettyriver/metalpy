@@ -46,7 +46,7 @@ def make_compmap_oiierr(datapath,figpath=None,flux_scale_factor=1,fwhm=None,plot
     # choose a sample
     sample = 0
     sm = SpectralModel(
-            lines=[[3726.1], [3728.8]],
+            lines=[[3727.092], [3729.875]],
             lsf_fwhm=0.846,)
     wave = post_b3d.metadata.get_axis_array('r')
     fit_con, fit_var_con = sm.fit_cube(wave, post_b3d.con_cubes[sample], post_b3d.var)
