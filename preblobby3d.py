@@ -480,11 +480,12 @@ class PreBlobby3D:
         plt.plot(data3d[ypix,xpix,:])
         plt.show()
 
-    def model_options(self,inc_path,flat_vdisp=True,psfimg=True,gaussian=2):
+    def model_options(self,inc_path,flat_vdisp=True,psfimg=True,gaussian=2,
+                      constrain_kinematics=None):
         
         
         '''emi_line: Ha or Oii
-        
+            constrain_kinematics: path of kinematic parameter csv file
         
         '''
         
@@ -569,6 +570,36 @@ class PreBlobby3D:
         
         if flat_vdisp == True:
             modelfile.write('VDISPN_SIGMA\t1.000000e-09\n')
+        if constrain_kinematics is not None:
+            kinematics_df = pd.read_csv(constrain_kinematics)
+            # vsys to be free
+            i = 0
+            vc = kinematics_df['VMAX'][i]
+            rt = kinematics_df['VSLOPE'][i]
+            beta = kinematics_df['VBETA'][i]
+            gamma = kinematics_df['VGAMMA'][i]
+            pa = kinematics_df['PA'][i]
+            #vsys = kinematics_df['VSYS'][i]
+            
+            modelfile.write('VMAX_MIN\t{:.6f}\n'.format(vc - 1e-6))
+            modelfile.write('VMAX_MAX\t{:.6f}\n'.format(vc + 1e-6))
+            
+            modelfile.write('VSLOPE_MIN\t{:.6f}\n'.format(rt - 1e-6))
+            modelfile.write('VSLOPE_MAX\t{:.6f}\n'.format(rt + 1e-6))
+            
+            modelfile.write('VBETA_MIN\t{:.6f}\n'.format(beta - 1e-6))
+            modelfile.write('VBETA_MAX\t{:.6f}\n'.format(beta + 1e-6))
+            
+            modelfile.write('VGAMMA_MIN\t{:.6f}\n'.format(gamma - 1e-6))
+            modelfile.write('VGAMMA_MAX\t{:.6f}\n'.format(gamma + 1e-6))
+            
+            modelfile.write('PA_MIN\t{:.6f}\n'.format(pa - 1e-6))
+            modelfile.write('PA_MAX\t{:.6f}\n'.format(pa + 1e-6))
+            
+            
+            
+            
+            
         
         modelfile.close()
         
