@@ -69,7 +69,7 @@ class PreBlobby3D:
         oii_3730_ferr = self.emidata['OII_3730_FERR'].data
         self.oii_sum_flux = oii_3727_f + oii_3730_f
         self.oii_sum_ferr = np.sqrt(oii_3727_ferr**2+oii_3730_ferr**2)
-        
+        self.oii_sum_sn = self.oii_sum_flux/self.oii_sum_ferr
         self.dilated_mask = self.emidata['DILATED_MASK'].data
         self.ha_sn = self.ha_flux/self.ha_err
         
@@ -563,8 +563,8 @@ class PreBlobby3D:
             modelfile.write('LINE\t6562.81\n')
             modelfile.write('LINE\t6583.1\t6548.1\t0.333\n')
         elif self.emi_line == 'Oii':
-            modelfile.write('LINE\t3726.1\n')
-            modelfile.write('LINE\t3728.8\n')
+            modelfile.write('LINE\t3727.092\n')
+            modelfile.write('LINE\t3729.875\n')
         
         
         if flat_vdisp == True:
