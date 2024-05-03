@@ -599,7 +599,8 @@ class PreBlobby3D:
             modelfile.write('PA_MAX\t{:.6f}\n'.format(pa + np.power(0.1,5-self.get_order(pa))))
             
             if constrain_vdisp == True:
-                vdisp = kinematics_df['VDISP0'][i]
+                # vdisp take median value of all effective samples
+                vdisp = kinematics_df['VDISP0'].median()
                 modelfile.write('LOGVDISP0_MIN\t{:.6f}\n'.format(vdisp - np.power(0.1,5-self.get_order(vdisp))))
                 modelfile.write('LOGVDISP0_MAX\t{:.6f}\n'.format(vdisp + np.power(0.1,5-self.get_order(vdisp))))
             
