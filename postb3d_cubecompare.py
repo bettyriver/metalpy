@@ -146,6 +146,26 @@ def plot_ha_oii_cubecompare(datapath_ha,emi_sn_path_ha,datapath_oii,
     plot_cubecompare(datapath_ha,'Ha',emi_sn_path_ha,mode)
     plot_cubecompare(datapath_oii,'Oii',emi_sn_path_oii,mode)
     
+
+def oii_doublet_ratio(datapath):
+    
+    post_b3d = PostBlobby3D(
+            samples_path=datapath+'posterior_sample.txt',
+            data_path=datapath+'data.txt',
+            var_path=datapath+'var.txt',
+            metadata_path=datapath+'metadata.txt',
+            nlines=2)
+    
+    sample = 0
+    sm = SpectralModel(
+            lines=[[3727.092], [3729.875]],
+            lsf_fwhm=0.846,)
+    precon_flux_oii_3727 = post_b3d.maps[sample, 0]
+    precon_flux_oii_3729 = post_b3d.maps[sample,1]
     
     
+    plt.scatter(precon_flux_oii_3727+precon_flux_oii_3729,precon_flux_oii_3729/precon_flux_oii_3727)
+    plt.xlabel('oii 3727+3729')
+    plt.ylabel('oii 3729/3727')
+    plt.show()
     
