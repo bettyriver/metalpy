@@ -19,6 +19,8 @@ from matplotlib import colors
 from numpy.ma import is_masked
 from matplotlib.gridspec import GridSpec
 import pandas as pd
+import math
+
 
 class PreBlobby3D:
     
@@ -481,7 +483,7 @@ class PreBlobby3D:
         plt.show()
 
     def model_options(self,inc_path,flat_vdisp=True,psfimg=True,gaussian=2,
-                      constrain_kinematics=None):
+                      constrain_kinematics=None,constrain_vdisp=False):
         
         
         '''emi_line: Ha or Oii
@@ -581,27 +583,49 @@ class PreBlobby3D:
             pa = kinematics_df['PA'][i]
             #vsys = kinematics_df['VSYS'][i]
             
-            modelfile.write('VMAX_MIN\t{:.6f}\n'.format(vc - 1e-6))
-            modelfile.write('VMAX_MAX\t{:.6f}\n'.format(vc + 1e-6))
+            modelfile.write('VC_MIN\t{:.6f}\n'.format(vc - np.power(0.1,5-self.get_order(vc))))
+            modelfile.write('VC_MAX\t{:.6f}\n'.format(vc + np.power(0.1,5-self.get_order(vc))))
             
-            modelfile.write('VSLOPE_MIN\t{:.6f}\n'.format(rt - 1e-6))
-            modelfile.write('VSLOPE_MAX\t{:.6f}\n'.format(rt + 1e-6))
+            modelfile.write('VSLOPE_MIN\t{:.6f}\n'.format(rt - np.power(0.1,5-self.get_order(rt))))
+            modelfile.write('VSLOPE_MAX\t{:.6f}\n'.format(rt + np.power(0.1,5-self.get_order(rt))))
             
-            modelfile.write('VBETA_MIN\t{:.6f}\n'.format(beta - 1e-6))
-            modelfile.write('VBETA_MAX\t{:.6f}\n'.format(beta + 1e-6))
+            modelfile.write('VBETA_MIN\t{:.6f}\n'.format(beta - np.power(0.1,5-self.get_order(beta))))
+            modelfile.write('VBETA_MAX\t{:.6f}\n'.format(beta + np.power(0.1,5-self.get_order(beta))))
             
-            modelfile.write('VGAMMA_MIN\t{:.6f}\n'.format(gamma - 1e-6))
-            modelfile.write('VGAMMA_MAX\t{:.6f}\n'.format(gamma + 1e-6))
+            modelfile.write('VGAMMA_MIN\t{:.6f}\n'.format(gamma - np.power(0.1,5-self.get_order(gamma))))
+            modelfile.write('VGAMMA_MAX\t{:.6f}\n'.format(gamma + np.power(0.1,5-self.get_order(gamma))))
             
-            modelfile.write('PA_MIN\t{:.6f}\n'.format(pa - 1e-6))
-            modelfile.write('PA_MAX\t{:.6f}\n'.format(pa + 1e-6))
+            modelfile.write('PA_MIN\t{:.6f}\n'.format(pa - np.power(0.1,5-self.get_order(pa))))
+            modelfile.write('PA_MAX\t{:.6f}\n'.format(pa + np.power(0.1,5-self.get_order(pa))))
             
-            
+            if constrain_vdisp == True:
+                vdisp = kinematics_df['VDISP0'][i]
+                modelfile.write('LOGVDISP0_MIN\t{:.6f}\n'.format(vdisp - np.power(0.1,5-self.get_order(vdisp))))
+                modelfile.write('LOGVDISP0_MAX\t{:.6f}\n'.format(vdisp + np.power(0.1,5-self.get_order(vdisp))))
             
             
             
         
         modelfile.close()
+        
+    def get_order(self,num):
+        # Handling zero separately because log10(0) is undefined
+        if num == 0:
+            raise ValueError("log10(0) is undefined, so the order of 0 is not defined.")
+        
+        # Calculate the order using log10 and floor function
+        order = math.floor(math.log10(abs(num)))
+        
+        if order<0:
+            order = -1
+        
+        return order
+
+    # Test cases
+    #print(get_order(321))  # Output: 2
+    #print(get_order(67))   # Output: 1
+    #print(get_order(3))    # Output: 0
+    #print(get_order(0.3))  # Output: -1
         
     def dn4_options(self,mask_dilated_mask=True):
         modelfile = open(self.save_path+"OPTIONS","w")
