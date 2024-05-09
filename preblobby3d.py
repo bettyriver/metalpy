@@ -483,11 +483,18 @@ class PreBlobby3D:
         plt.show()
 
     def model_options(self,inc_path,flat_vdisp=True,psfimg=True,gaussian=2,
-                      constrain_kinematics=None,constrain_vdisp=False):
+                      constrain_kinematics=None,constrain_vdisp=False,
+                      constrain_pa=None):
         
         
         '''emi_line: Ha or Oii
             constrain_kinematics: path of kinematic parameter csv file
+        
+        constrain_kinematics: constrain vel profile, pa
+        constrain_vdisp: when constrain_kinematics is not None, constrain
+                         vel profile, pa, vdisp
+        constrain_pa: constrain pa only
+        
         
         '''
         
@@ -572,6 +579,16 @@ class PreBlobby3D:
         
         if flat_vdisp == True:
             modelfile.write('VDISPN_SIGMA\t1.000000e-09\n')
+        
+        if constrain_pa is not None:
+            kinematics_df = pd.read_csv(constrain_pa)
+            i = 0
+            pa = kinematics_df['PA'][i]
+            modelfile.write('PA_MIN\t{:.6f}\n'.format(pa - np.power(0.1,5-self.get_order(pa))))
+            modelfile.write('PA_MAX\t{:.6f}\n'.format(pa + np.power(0.1,5-self.get_order(pa))))
+            
+            
+        
         if constrain_kinematics is not None:
             kinematics_df = pd.read_csv(constrain_kinematics)
             # vsys to be free
