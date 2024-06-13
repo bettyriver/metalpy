@@ -11,14 +11,15 @@ part of code from Di Wang
 """
 
 import sys
-sys.path.insert(0,'/project/blobby3d/Blobby3D/pyblobby3d/src/pyblobby3d/')
-#sys.path.insert(0,'/Users/ymai0110/Documents/Blobby3D_develop/Blobby3D/pyblobby3d/src/pyblobby3d/')
+#sys.path.insert(0,'/project/blobby3d/Blobby3D/pyblobby3d/src/pyblobby3d/')
+#sys.path.insert(0,'/Users/ymai0110/Documents/Blobby3D_develop/Blobby3D/pyblobby3d/src/')
 
 import numpy as np
 import matplotlib.pyplot as plt
 
-from post_blobby3d import PostBlobby3D
-from moments import SpectralModel
+from pyblobby3d.post_blobby3d import PostBlobby3D
+from pyblobby3d.moments import SpectralModel
+from pyblobby3d.b3dcomp import map_limits
  
 import matplotlib as mpl
 from astropy.io import fits
@@ -26,7 +27,9 @@ import pandas as pd
 
 from astropy.cosmology import LambdaCDM
 lcdm = LambdaCDM(70,0.3,0.7)
-
+import astropy.units as u
+from dust_extinction.parameter_averages import F19
+from scipy.optimize import curve_fit
 
 def plot_oii_gradient(post_b3d,global_param,x_cen_pix,y_cen_pix,ellip,ax,
                       label=None,plot_data=False):
@@ -314,6 +317,677 @@ def plot_metal_gradient(post_b3d_oii,post_b3d_nii,global_param,x_cen_pix,
     else:
         ax.scatter(dist_arr, metal_map,label=label,alpha=0.4)
     
+    
+def plot_metal_gradient_dustcorr(ha_map,hb_map,oii_map,nii_map,
+                                 ha_sn,hb_sn,oii_sn,nii_sn,
+                                 pa,x_cen_pix,y_cen_pix,ellip,
+                                 foreground_E_B_V,
+                                 z,re_kpc=None,savepath=None,
+                                 r_option='kpc',plot_title=None,
+                                 limit_metal_range=False):
+    
+    '''
+    plot the metallicity of each spaxels as function of kpc or Re
+    do dust corretion using Balmer decrement; follow Mun et al. 2024
+    ...add more details here ...
+    
+    
+    ha_map: 2d-array of ha flux
+    ha_sn: 2d-array of sn of ha
+    oii_map: 2d-array of oii sum map (oii3727+oii3729)
+    pa: PA from b3d output, use angletype='NTE'
+    x_cen_pix: center pixel of x
+    ellip: ellipticity from profound
+    foreground_E_B_V: foreground extinction value, 
+    get from https://irsa.ipac.caltech.edu/applications/DUST/
+    
+    
+    z: redshift
+    re_kpc: half-light radius of white light image of galaxy
+    r_option:'kpc' or 're'
+    
+    '''
+    
+    # dust correction
+    
+    # oii hb ha nii
+    # [3727.092,3729.875] 4862.683 6564.61 [6549.85, 6585.28]
+    
+    # oii_sum hb ha nii6585
+    # 3728.4835 4862.683 6564.61 6585.28
+    oii_wave = 3728.4835
+    hb_wave = 4862.683
+    ha_wave = 6564.61
+    nii_wave = 6585.28
+    wavelengths_restframe = np.array([oii_wave,hb_wave,ha_wave,nii_wave])*u.AA
+    wavelengths_redshift = wavelengths_restframe * (1+z)
+    
+    ha_correct_MW = dust_correction(flux=ha_map, 
+                                               E_B_V=foreground_E_B_V, 
+                                               wavelength=ha_wave* (1+z))
+    
+    hb_correct_MW = dust_correction(flux=hb_map, 
+                                               E_B_V=foreground_E_B_V, 
+                                               wavelength=hb_wave* (1+z))
+    
+    nii_correct_MW = dust_correction(flux=nii_map, 
+                                               E_B_V=foreground_E_B_V,
+                                               wavelength=nii_wave* (1+z))
+    
+    oii_correct_MW = dust_correction(flux=oii_map, 
+                                               E_B_V=foreground_E_B_V, 
+                                               wavelength=oii_wave* (1+z))
+    
+    
+    E_44_55 = 2.5/1.16 * np.log10(ha_correct_MW/hb_correct_MW/2.86) # eq 10 in Fitzpatrick+19
+    E_B_V_intrin = E_44_55 * 0.976 # based on table 4 in Fitzpatrick+19, assuming E(44-55)=0.5, RV=3.1
+    
+    nii_intrinsic = dust_correction_2d(flux_map=nii_correct_MW, 
+                                    E_B_V_map=E_B_V_intrin, 
+                                    wavelength=nii_wave)
+    oii_intrinsic = dust_correction_2d(flux_map=oii_correct_MW, 
+                                       E_B_V_map=E_B_V_intrin, 
+                                       wavelength=oii_wave)
+    
+    
+    logR_map = np.log10(nii_intrinsic/oii_intrinsic)
+    metal_map = metal_k19(logR_map)
+    
+    dist_arr = ellip_distarr(size=metal_map.shape, centre=(x_cen_pix,y_cen_pix),
+                             ellip=ellip, pa=pa,angle_type='NTE')
+    
+    query = (ha_sn>=3) & (hb_sn>=3) & (oii_sn>=3)
+    
+    mask_region = ~query
+    
+    metal_map[mask_region] = np.nan
+    
+    
+    radius_kpc = pix_to_kpc(radius_in_pix=dist_arr, z=z)
+    radius_re = radius_kpc/re_kpc
+    
+    if limit_metal_range==True:
+        metal_map[metal_map<=5] = np.nan 
+        metal_map[metal_map>=10] = np.nan 
+    
+    if r_option=='kpc':
+    
+        plt.scatter(radius_kpc, metal_map)
+        plt.vlines(x=re_kpc,ymin=np.nanmin(metal_map),ymax=np.nanmax(metal_map),
+                   linestyle='--')
+        plt.xlabel('radius [kpc]')
+    elif r_option=='re':
+        plt.scatter(radius_re, metal_map)
+        
+        plt.xlabel('radius/Re')
+    plt.title(plot_title)
+    
+    plt.ylabel('log(O/H) + 12')
+    if savepath is not None:
+        plt.savefig(savepath,dpi=300,bbox_inches='tight')
+    plt.show()
+
+class cmap:
+    flux = 'Oranges'
+    v = 'RdYlBu_r'
+    vdisp = 'YlOrBr'
+    residuals = 'RdYlBu_r'
+
+def get_metal_map_n2o2(ha_map,hb_map,oii_map,nii_map,
+                                 ha_sn,hb_sn,oii_sn,nii_sn,foreground_E_B_V,
+                                 z):
+    '''input flux map, flux SN, foreground E(B-V), redshift
+    output metal map with dust correction and mask low SN region'''
+    
+    
+    
+    # dust correction
+    
+    # oii hb ha nii
+    # [3727.092,3729.875] 4862.683 6564.61 [6549.85, 6585.28]
+    
+    # oii_sum hb ha nii6585
+    # 3728.4835 4862.683 6564.61 6585.28
+    oii_wave = 3728.4835
+    hb_wave = 4862.683
+    ha_wave = 6564.61
+    nii_wave = 6585.28
+    wavelengths_restframe = np.array([oii_wave,hb_wave,ha_wave,nii_wave])*u.AA
+    wavelengths_redshift = wavelengths_restframe * (1+z)
+    
+    ha_correct_MW = dust_correction(flux=ha_map, 
+                                               E_B_V=foreground_E_B_V, 
+                                               wavelength=ha_wave* (1+z))
+    
+    hb_correct_MW = dust_correction(flux=hb_map, 
+                                               E_B_V=foreground_E_B_V, 
+                                               wavelength=hb_wave* (1+z))
+    
+    nii_correct_MW = dust_correction(flux=nii_map, 
+                                               E_B_V=foreground_E_B_V,
+                                               wavelength=nii_wave* (1+z))
+    
+    oii_correct_MW = dust_correction(flux=oii_map, 
+                                               E_B_V=foreground_E_B_V, 
+                                               wavelength=oii_wave* (1+z))
+    
+    
+    E_44_55 = 2.5/1.16 * np.log10(ha_correct_MW/hb_correct_MW/2.86) # eq 10 in Fitzpatrick+19
+    E_B_V_intrin = E_44_55 * 0.976 # based on table 4 in Fitzpatrick+19, assuming E(44-55)=0.5, RV=3.1
+    
+    nii_intrinsic = dust_correction_2d(flux_map=nii_correct_MW, 
+                                    E_B_V_map=E_B_V_intrin, 
+                                    wavelength=nii_wave)
+    oii_intrinsic = dust_correction_2d(flux_map=oii_correct_MW, 
+                                       E_B_V_map=E_B_V_intrin, 
+                                       wavelength=oii_wave)
+    
+    
+    logR_map = np.log10(nii_intrinsic/oii_intrinsic)
+    metal_map = metal_k19(logR_map)
+    
+    query = (ha_sn>=3) & (hb_sn>=3) & (oii_sn>=3)
+    
+    mask_region = ~query
+    
+    metal_map[mask_region] = np.nan
+    
+    return metal_map
+
+
+def get_metal_map_n2ha(ha_map,nii_map,ha_sn,nii_sn):
+    
+    logR_map = np.log10(nii_map/ha_map)
+    metal_map = metal_k19(logR=logR_map,R='N2Ha')
+    
+    query = ha_sn>=3
+    
+    mask_region = ~query
+    
+    metal_map[mask_region] = np.nan
+    
+    return metal_map
+    
+    
+    
+def diagnostic_map(ha_map,hb_map,oii_map,nii_map,
+                                 ha_sn,hb_sn,oii_sn,nii_sn,
+                                 ha_err,hb_err,oii_err,nii_err,
+                                 pa,x_cen_pix,y_cen_pix,ellip,
+                                 foreground_E_B_V,
+                                 z,re_kpc=None,savepath=None,
+                                 r_option='kpc',plot_title=None,
+                                 limit_metal_range=False):
+    '''
+    
+    ha_map: b3d pre-convolved ha flux
+    ha_sn: ha sn from gist
+    ha_err: ha err from gist
+    
+    
+    
+    
+    make diagnostic map of metallicity, including NII/OII map, Halpha/Hbeta map
+    metallicity map. with radius contour (0.5Re, 1Re..), galaxy center
+    
+    metal (without dust correction) vs radius plot with errorbar
+    metal (with dust correction) vs radius plot with errorbar
+    
+    balmer decrement from GIST output
+    metal map using GIST balmer decrement
+    metal gradient using GIST balmer decrement
+    
+    metal map using nii/ha
+    metal graident using nii/ha
+    
+    bin data in each 1kpc (std or 16,84) and fit the gradient, text of fitting
+    1. nii/oii without dust corretion
+    2. nii/oii with dust correction
+    3. nii/ha
+    
+    
+    how to bin: 1. mean 2. halpha weight average (two version of bin on the same plot)
+    
+    
+    
+    '''
+    plt.rcParams.update({'font.size': 25})
+    
+    dist_arr = ellip_distarr(size=ha_map.shape, centre=(x_cen_pix,y_cen_pix),
+                             ellip=ellip, pa=pa,angle_type='NTE')
+    
+    radius_kpc = pix_to_kpc(radius_in_pix=dist_arr, z=z)
+    radius_re = radius_kpc/re_kpc
+    
+    
+    
+    fig, ax = plt.subplots(4,4,figsize=(34,34), 
+                           gridspec_kw={'wspace':0.6,'hspace':0.35})
+    ax = ax.ravel()
+    
+    # NII/OII map
+    
+    clim = map_limits(np.log10(nii_map/oii_map),pct=90)
+    norm = mpl.colors.Normalize(vmin=clim[0], vmax=clim[1])
+    
+    im0 = ax[0].imshow(np.log10(nii_map/oii_map),
+                        origin='lower',
+                        interpolation='nearest',
+                        norm=norm,
+                        cmap=cmap.flux)
+    cb0 = plt.colorbar(im0,ax=ax[0],fraction=0.047)
+    cb0.set_label(label='log10(NII/OII)',fontsize=20)
+    ax[0].set_title('nii/oii')
+    
+    ax[0].contour(radius_re, levels=[0.5], colors='r', linewidths=2, linestyles='solid')
+    ax[0].contour(radius_re, levels=[1], colors='g', linewidths=2, linestyles='dashed')
+    ax[0].contour(radius_re, levels=[1.5], colors='b', linewidths=2, linestyles='dotted')
+    ax[0].scatter(x_cen_pix,y_cen_pix,c='b',marker='x')
+    
+    
+    # Halpha/Hbeta map
+    
+    norm = mpl.colors.Normalize(vmin=0, vmax=6)
+    
+    im1 = ax[1].imshow(ha_map/hb_map,
+                        origin='lower',
+                        interpolation='nearest',
+                        norm=norm,
+                        cmap=cmap.flux)
+    cb1 = plt.colorbar(im1,ax=ax[1],fraction=0.047)
+    cb1.set_label(label='Halpha/Hbeta',fontsize=20)
+    ax[1].set_title('Balmer decrement')
+    
+    ax[1].contour(radius_re, levels=[0.5], colors='r', linewidths=2, linestyles='solid')
+    ax[1].contour(radius_re, levels=[1], colors='g', linewidths=2, linestyles='dashed')
+    ax[1].contour(radius_re, levels=[1.5], colors='b', linewidths=2, linestyles='dotted')
+    ax[1].scatter(x_cen_pix,y_cen_pix,c='b',marker='x')
+    
+    
+    # metal map - with dust correction
+    
+    metal_map_n2o2_b3ddust = get_metal_map_n2o2(ha_map=ha_map, hb_map=hb_map, oii_map=oii_map, 
+                              nii_map=nii_map, ha_sn=ha_sn, hb_sn=hb_sn,
+                              oii_sn=oii_sn, nii_sn=nii_sn, 
+                              foreground_E_B_V=foreground_E_B_V, z=z)
+    
+    
+    # kewley+2019 the valid range of NII/OII metallicity is [7.63,9.23]
+    norm = mpl.colors.Normalize(vmin=7.0, vmax=9.3)
+    
+    im2 = ax[2].imshow(metal_map_n2o2_b3ddust,
+                        origin='lower',
+                        interpolation='nearest',
+                        norm=norm,
+                        cmap=cmap.flux)
+    cb2 = plt.colorbar(im2,ax=ax[2],fraction=0.047)
+    cb2.set_label(label='log(O/H)+12',fontsize=20)
+    ax[2].set_title('metal map (n2o2)')
+    
+    ax[2].contour(radius_re, levels=[0.5], colors='r', linewidths=2, linestyles='solid')
+    ax[2].contour(radius_re, levels=[1], colors='g', linewidths=2, linestyles='dashed')
+    ax[2].contour(radius_re, levels=[1.5], colors='b', linewidths=2, linestyles='dotted')
+    ax[2].scatter(x_cen_pix,y_cen_pix,c='b',marker='x')
+    
+    
+    
+    dist_arr = ellip_distarr(size=metal_map_n2o2_b3ddust.shape, centre=(x_cen_pix,y_cen_pix),
+                             ellip=ellip, pa=pa,angle_type='NTE')
+    
+    # metal as function of radius, without dust correction
+    
+    logR_map = np.log10(nii_map/oii_map)
+    metal_map_n2o2_nodustc = metal_k19(logR_map)
+    
+    query = (ha_sn>=3) & (hb_sn>=3) & (oii_sn>=3)
+    
+    mask_region = ~query
+    
+    metal_map_n2o2_nodustc[mask_region] = np.nan
+    
+    radius_kpc = pix_to_kpc(radius_in_pix=dist_arr, z=z)
+    radius_re = radius_kpc/re_kpc
+    
+    # get metal error
+    nii_err_map = nii_map/nii_sn
+    oii_err_map = oii_map/oii_sn
+    
+    lognii_oii,lognii_oii_err = log10_ratio_with_error(a=nii_map, b=oii_map, 
+                                            a_err=nii_err_map, 
+                                            b_err=oii_err_map)
+    
+    metal_i, metal_err = calculate_z_and_error(x=lognii_oii, 
+                                               x_err=lognii_oii_err, 
+                                               y=-3.17)
+    
+    
+    ax[3].scatter(radius_kpc, metal_map_n2o2_nodustc)
+    ax[3].errorbar(x=radius_kpc.ravel(),y=metal_map_n2o2_nodustc.ravel(),yerr=metal_err.ravel(),fmt='none')
+    ax[3].axvline(x=re_kpc,ymin=0,ymax=1,
+               linestyle='--')
+    ax[3].axhline(y=9.23,xmin=0,xmax=1,linestyle='--',c='r')
+    ax[3].axhline(y=7.63,xmin=0,xmax=1,linestyle='--',c='r')
+    ax[3].set_xlabel('radius [kpc]')
+    ax[3].set_ylim(7.0,9.3)
+    ax[3].set_title('metal (n2o2) w/o dust c')
+    
+    # metal as function of radius, with dust correction
+    
+    #metal_map = get_metal_map_n2o2(ha_map=ha_map, hb_map=hb_map, oii_map=oii_map, 
+    #                          nii_map=nii_map, ha_sn=ha_sn, hb_sn=hb_sn,
+    #                          oii_sn=oii_sn, nii_sn=nii_sn, 
+    #                          foreground_E_B_V=foreground_E_B_V, z=z)
+    ax[4].scatter(radius_kpc, metal_map_n2o2_b3ddust)
+    ax[4].axvline(x=re_kpc,ymin=0,ymax=1,
+            linestyle='--')
+    ax[4].axhline(y=9.23,xmin=0,xmax=1,linestyle='--',c='r')
+    ax[4].axhline(y=7.63,xmin=0,xmax=1,linestyle='--',c='r')
+    ax[4].set_xlabel('radius [kpc]')
+    ax[4].set_ylim(7.0,9.3)
+    ax[4].set_title('metal map (n2o2) - b3d balmer')
+    
+    
+    # balmer decrement of GIST
+    ha_gist = ha_sn * ha_err
+    hb_gist = hb_sn * hb_err
+    nii_gist = nii_sn * nii_err
+    oii_gist = oii_sn * oii_err
+    
+    norm = mpl.colors.Normalize(vmin=0, vmax=6)
+    
+    im5 = ax[5].imshow(ha_gist/hb_gist,
+                        origin='lower',
+                        interpolation='nearest',
+                        norm=norm,
+                        cmap=cmap.flux)
+    cb5 = plt.colorbar(im5,ax=ax[5],fraction=0.047)
+    cb5.set_label(label='Halpha/Hbeta',fontsize=20)
+    ax[5].set_title('Balmer decrement - gist')
+    
+    ax[5].contour(radius_re, levels=[0.5], colors='r', linewidths=2, linestyles='solid')
+    ax[5].contour(radius_re, levels=[1], colors='g', linewidths=2, linestyles='dashed')
+    ax[5].contour(radius_re, levels=[1.5], colors='b', linewidths=2, linestyles='dotted')
+    ax[5].scatter(x_cen_pix,y_cen_pix,c='b',marker='x')
+    
+    
+    # metal map with dust correction - gist balmer decrement
+    
+    # nii oii from b3d, ha hb from gist
+    metal_map_n2o2_gistdust = get_metal_map_n2o2(ha_map=ha_gist, hb_map=hb_gist, oii_map=oii_map, 
+                              nii_map=nii_map, ha_sn=ha_sn, hb_sn=hb_sn,
+                              oii_sn=oii_sn, nii_sn=nii_sn, 
+                              foreground_E_B_V=foreground_E_B_V, z=z)
+    
+    
+    # kewley+2019 the valid range of NII/OII metallicity is [7.63,9.23]
+    norm = mpl.colors.Normalize(vmin=7.0, vmax=9.3)
+    
+    im6 = ax[6].imshow(metal_map_n2o2_gistdust,
+                        origin='lower',
+                        interpolation='nearest',
+                        norm=norm,
+                        cmap=cmap.flux)
+    cb6 = plt.colorbar(im6,ax=ax[6],fraction=0.047)
+    cb6.set_label(label='log(O/H)+12',fontsize=20)
+    ax[6].set_title('metal map(n2o2)-gist balmer')
+    
+    ax[6].contour(radius_re, levels=[0.5], colors='r', linewidths=2, linestyles='solid')
+    ax[6].contour(radius_re, levels=[1], colors='g', linewidths=2, linestyles='dashed')
+    ax[6].contour(radius_re, levels=[1.5], colors='b', linewidths=2, linestyles='dotted')
+    ax[6].scatter(x_cen_pix,y_cen_pix,c='b',marker='x')
+    
+    
+    # metal gradient - gist balmer decrement
+    
+    ax[7].scatter(radius_kpc, metal_map_n2o2_gistdust)
+    ax[7].axvline(x=re_kpc,ymin=0,ymax=1,
+            linestyle='--')
+    ax[7].axhline(y=9.23,xmin=0,xmax=1,linestyle='--',c='r')
+    ax[7].axhline(y=7.63,xmin=0,xmax=1,linestyle='--',c='r')
+    ax[7].set_xlabel('radius [kpc]')
+    ax[7].set_ylim(7.0,9.3)
+    ax[7].set_title('metal(n2o2)-gist balmer')
+    
+    
+    # metal map - nii/ha
+    
+    
+    metal_map_n2ha = get_metal_map_n2ha(ha_map=ha_map,nii_map=nii_map,ha_sn=ha_sn,
+                                   nii_sn=nii_sn)
+    
+    
+    
+    # kewley+2019 the valid range of NII/Ha metallicity is [7.63,8.53]
+    norm = mpl.colors.Normalize(vmin=7.0, vmax=9.3)
+    
+    im8 = ax[8].imshow(metal_map_n2ha,
+                        origin='lower',
+                        interpolation='nearest',
+                        norm=norm,
+                        cmap=cmap.flux)
+    cb8 = plt.colorbar(im8,ax=ax[8],fraction=0.047)
+    cb8.set_label(label='log(O/H)+12',fontsize=20)
+    ax[8].set_title('metal map (n2ha)')
+    
+    ax[8].contour(radius_re, levels=[0.5], colors='r', linewidths=2, linestyles='solid')
+    ax[8].contour(radius_re, levels=[1], colors='g', linewidths=2, linestyles='dashed')
+    ax[8].contour(radius_re, levels=[1.5], colors='b', linewidths=2, linestyles='dotted')
+    ax[8].scatter(x_cen_pix,y_cen_pix,c='b',marker='x')
+    
+    # metal gradient - gist balmer decrement
+    
+    ax[9].scatter(radius_kpc, metal_map_n2ha)
+    ax[9].axvline(x=re_kpc,ymin=0,ymax=1,
+            linestyle='--')
+    ax[9].axhline(y=8.53,xmin=0,xmax=1,linestyle='--',c='r')
+    ax[9].axhline(y=7.63,xmin=0,xmax=1,linestyle='--',c='r')
+    ax[9].set_xlabel('radius [kpc]')
+    ax[9].set_ylim(7.0,9.3)
+    ax[9].set_title('metal (n2ha)')
+    
+    
+    # bin metal 
+    #1. nii/oii without dust corretion
+    axplot_bin_metal(ax=ax[10],metal_map=metal_map_n2o2_nodustc,
+                     ha_map=ha_map,radius_map=radius_kpc,re_kpc=re_kpc,
+                     title='n2o2 w/o dust c',R='N2O2',legend=True)
+    
+    #2. nii/oii with dust correction-b3d
+    axplot_bin_metal(ax=ax[11],metal_map=metal_map_n2o2_b3ddust,
+                     ha_map=ha_map,radius_map=radius_kpc,re_kpc=re_kpc,
+                     title='n2o2 b3d balmer',R='N2O2')
+    
+    #3. nii/oii with dust correction-gist
+    axplot_bin_metal(ax=ax[12],metal_map=metal_map_n2o2_gistdust,
+                     ha_map=ha_map,radius_map=radius_kpc,re_kpc=re_kpc,
+                     title='n2o2 gist balmer',R='N2O2')
+    
+    #4. nii/ha
+    axplot_bin_metal(ax=ax[13],metal_map=metal_map_n2ha,
+                     ha_map=ha_map,radius_map=radius_kpc,title='n2ha',
+                     re_kpc=re_kpc,R='N2Ha')
+    
+    
+    
+    
+    
+    fig.suptitle(plot_title)
+    if savepath is not None:
+        plt.savefig(savepath,dpi=300,bbox_inches='tight')
+    
+    plt.show()
+
+
+def axplot_bin_metal(ax,metal_map,ha_map,radius_map,title,re_kpc,R='N2O2',
+                     legend=False):
+    metal_mean, metal_haweight,metal_mean_stdonmean = get_bin_metal(
+        metal_map=metal_map, ha_map=ha_map, radius_map=radius_map)
+    
+    # get the max radius where data available
+    radius_max_kpc = np.nanmax(radius_map[~np.isnan(metal_map)])
+    radius_array = np.arange(int(radius_max_kpc*0.9))
+    
+    popt_mean, pcov_mean = curve_fit(linear_func, radius_array, metal_mean)
+    a_mean, b_mean = popt_mean
+    a_mean_err, b_mean_err = np.sqrt(np.diag(pcov_mean))
+    
+    popt_haweight, pcov_haweight = curve_fit(linear_func, radius_array, metal_haweight)
+    a_haweight, b_haweight = popt_haweight
+    a_haweight_err, b_haweight_err = np.sqrt(np.diag(pcov_haweight))
+    
+    
+    ax.errorbar(radius_array, metal_mean,
+                    yerr=metal_mean_stdonmean,fmt='none',c='b')
+    ax.scatter(radius_array,metal_mean,
+                   c='b',label='mean')
+    ax.scatter(radius_array,metal_haweight,label='ha weight',
+                   c='r')
+    
+    ax.plot(radius_array, linear_func(radius_array, *popt_mean), 
+                color='b', linestyle='--')
+    ax.plot(radius_array, linear_func(radius_array, *popt_haweight), 
+                color='r', linestyle='--')
+    ax.text(0.5, 0.1, 'y=({:.2f}$\pm${:.2f})x + ({:.2f}$\pm${:.2f})'.format(a_mean,a_mean_err,b_mean,b_mean_err), 
+            horizontalalignment='center',
+     verticalalignment='center', transform=ax.transAxes,c='b',fontsize=17)
+    
+    ax.text(0.5, 0.2, 'y=({:.2f}$\pm${:.2f})x + ({:.2f}$\pm${:.2f})'.format(a_haweight,a_haweight_err,b_haweight,b_haweight_err), 
+            horizontalalignment='center',
+     verticalalignment='center', transform=ax.transAxes,c='r',fontsize=17)
+    if legend:
+        ax.legend()
+    ax.set_xlabel('radius [kpc]')
+    ax.set_ylabel('log10(O/H)+12')
+    ax.set_title(title)
+    ax.set_ylim(7.0,9.3)
+    ax.axvline(x=re_kpc,ymin=0,ymax=1,
+            linestyle='--')
+    if R=='N2O2':
+        ax.axhline(y=9.23,xmin=0,xmax=1,linestyle='--',c='orange')
+        ax.axhline(y=7.63,xmin=0,xmax=1,linestyle='--',c='orange')
+    elif R=='N2Ha':
+        ax.axhline(y=8.53,xmin=0,xmax=1,linestyle='--',c='orange')
+        ax.axhline(y=7.63,xmin=0,xmax=1,linestyle='--',c='orange')
+
+
+
+def linear_func(x, a, b):
+    return a * x + b
+    
+
+
+def get_bin_metal(metal_map,ha_map,radius_map,radius_perc=0.9):
+    '''
+    radius_map: radius map in kpc
+    
+    return: 
+        metal_mean: mean of metal as function of radius
+        metal_haweight: ha flux weighted metal
+        metal_mean_std_on_mean: as the name
+    
+    '''
+    # get the max radius where data available
+    radius_max_kpc = np.nanmax(radius_map[~np.isnan(metal_map)])
+    radius_array = np.arange(int(radius_max_kpc*radius_perc))
+    
+    metal_mean = []
+    metal_haweight = []
+    metal_mean_std_on_mean = []
+    for r in radius_array:
+        query = (radius_map>=r)&(radius_map<r+1)
+        metal_mean.append(np.nanmean(metal_map[query]))
+        N = len(metal_map[query&(~np.isnan(metal_map))])
+        metal_mean_std_on_mean.append(np.nanstd(metal_map[query])/np.sqrt(N))
+        ma = np.ma.MaskedArray(metal_map, 
+                               mask=np.isnan(metal_map))
+        
+        metal_haweight.append(np.ma.average(ma[query], weights=ha_map[query]))
+        
+    return np.array(metal_mean), np.array(metal_haweight), np.array(metal_mean_std_on_mean)
+    
+    
+    
+def log10_ratio_with_error(a, b, a_err, b_err):
+    # Calculate the value of log10(a/b)
+    log10_ratio = np.log10(a / b)
+    
+    # Calculate the error using error propagation
+    ln10 = np.log(10)
+    log10_ratio_err = np.sqrt((a_err / (a * ln10))**2 + (b_err / (b * ln10))**2)
+    
+    return log10_ratio, log10_ratio_err
+    
+
+    
+def metal_k19(logR,logU=-3.17,R='N2O2'):
+    '''logR to log(O/H)+12 from Kewley+2019'''
+    # x here is log R, could be log(NII/OII) or log(NII/Ha)
+    # z here is log(O/H) + 12
+    # y here is logU
+    y = logU
+    x = logR
+    
+    if R=='N2O2':
+        z = 9.4772 + 1.1797 * x + 0.5085* y + 0.6879*x*y + 0.2807*x**2 \
+            + 0.1612*y**2 + 0.1187*x*y**2 + 0.1200*y*x**2 + 0.2293*x**3 \
+                + 0.0164*y**3
+    
+    if R=='N2Ha':
+        z = 10.526 + 1.9958 * x - 0.6741* y + 0.2892*x*y + 0.5712*x**2 \
+            - 0.6597*y**2 + 0.0101*x*y**2 + 0.0800*y*x**2 + 0.0782*x**3 \
+                - 0.0982*y**3
+    
+    
+    return z
+
+
+    
+def calculate_z_and_error(x, x_err, y=-3.17):
+    
+    # x here is log(NII/OII)
+    # z here is log(O/H) + 12
+    # y here is logU
+    
+    # Calculate z
+    z = (9.4772 + 1.1797 * x + 0.5085 * y + 0.6879 * x * y +
+         0.2807 * x**2 + 0.1612 * y**2 + 0.1187 * x * y**2 +
+         0.1200 * y * x**2 + 0.2293 * x**3 + 0.0164 * y**3)
+    
+    # Calculate the partial derivative of z with respect to x
+    dz_dx = (1.1797 + 0.6879 * y + 2 * 0.2807 * x + 0.1187 * y**2 +
+             2 * 0.1200 * y * x + 3 * 0.2293 * x**2)
+    
+    # Calculate the error in z
+    z_err = np.abs(dz_dx) * x_err
+    
+    return z, z_err
+
+
+def dust_correction_2d(flux_map, E_B_V_map, wavelength):
+    flux_map_correct = np.full_like(flux_map,np.nan)
+    
+    
+    ny, nx = flux_map.shape
+    for i in range(ny):
+        for j in range(nx):
+            flux_map_correct[i,j] = dust_correction(flux=flux_map[i,j], 
+                                                    E_B_V=E_B_V_map[i,j],
+                                                    wavelength=wavelength)
+    
+    return flux_map_correct
+    
+    
+
+def dust_correction(flux,E_B_V,wavelength):
+    
+    flux = flux * u.erg/(u.s * u.cm**2 * u.AA)
+    wavelength = wavelength * u.AA
+    
+    ext = F19(Rv=3.1)
+    flux_correct = flux / ext.extinguish(wavelength, 
+                                            Ebv=E_B_V)
+    flux_correct = flux_correct.value
+    return flux_correct
     
     
     

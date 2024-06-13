@@ -42,7 +42,7 @@ class PreBlobby3D:
             DESCRIPTION.
         wave_axis : TYPE, optional
             DESCRIPTION. The default is 0.
-        emi_line: Ha or Oii
+        emi_line: Ha or Oii or Hb
         
         
         
@@ -74,6 +74,16 @@ class PreBlobby3D:
         self.oii_sum_sn = self.oii_sum_flux/self.oii_sum_ferr
         self.dilated_mask = self.emidata['DILATED_MASK'].data
         self.ha_sn = self.ha_flux/self.ha_err
+        
+        
+        self.nii_flux = self.emidata['NII_6585_F'].data
+        self.nii_ferr = self.emidata['NII_6585_FERR'].data
+        self.nii_sn = self.nii_flux/self.nii_ferr
+        
+        
+        self.hb_flux = self.emidata['Hb_F'].data
+        self.hb_err = self.emidata['Hb_FERR'].data
+        self.hb_sn = self.hb_flux/self.hb_err
         
         self.data1 = self.fitsdata[1].data
         # datacube is (wavelength, yaxis, xaxis)
@@ -507,7 +517,11 @@ class PreBlobby3D:
             emi_line_wave = 3728
             # g-band, is most close to OII line at z~0.3
             emi_line_psfband = 0
-        
+        elif self.emi_line == 'Hb':
+            # Hbeta line wavelength in vacuum 4862.683 
+            emi_line_wave = 4862.683
+            # r-band, is the most close to Hbeta line at z~0.3
+            emi_line_psfband = 1
         
         
         
@@ -575,6 +589,8 @@ class PreBlobby3D:
         elif self.emi_line == 'Oii':
             modelfile.write('LINE\t3727.092\n')
             modelfile.write('LINE\t3729.875\n')
+        elif self.emi_line == 'Hb':
+            modelfile.write('LINE\t4862.683\n')
         
         
         if flat_vdisp == True:
@@ -582,11 +598,16 @@ class PreBlobby3D:
         
         if constrain_pa is not None:
             kinematics_df = pd.read_csv(constrain_pa)
-            i = 0
-            pa = kinematics_df['PA'][i]
-            modelfile.write('PA_MIN\t{:.6f}\n'.format(pa - np.power(0.1,5-self.get_order(pa))))
-            modelfile.write('PA_MAX\t{:.6f}\n'.format(pa + np.power(0.1,5-self.get_order(pa))))
             
+            pa_array = kinematics_df['PA'].to_numpy()
+            pa_mean, pa_std = self.circular_mean_and_std(pa_array)
+            
+            if pa_std>0.000001: # if too small, then pa_min would = pa_max when round to 6 decimal places
+                modelfile.write('PA_MIN\t{:.6f}\n'.format(pa_mean - pa_std))
+                modelfile.write('PA_MAX\t{:.6f}\n'.format(pa_mean + pa_std))
+            else:
+                modelfile.write('PA_MIN\t{:.6f}\n'.format(pa_mean - np.power(0.1,5-self.get_order(pa_mean))))
+                modelfile.write('PA_MAX\t{:.6f}\n'.format(pa_mean + np.power(0.1,5-self.get_order(pa_mean))))
             
         
         if constrain_kinematics is not None:
@@ -597,7 +618,7 @@ class PreBlobby3D:
             rt = kinematics_df['VSLOPE'][i]
             beta = kinematics_df['VBETA'][i]
             gamma = kinematics_df['VGAMMA'][i]
-            pa = kinematics_df['PA'][i]
+            pa_array = kinematics_df['PA'].to_numpy()
             #vsys = kinematics_df['VSYS'][i]
             
             modelfile.write('VC_MIN\t{:.6f}\n'.format(vc - np.power(0.1,5-self.get_order(vc))))
@@ -612,8 +633,15 @@ class PreBlobby3D:
             modelfile.write('VGAMMA_MIN\t{:.6f}\n'.format(gamma - np.power(0.1,5-self.get_order(gamma))))
             modelfile.write('VGAMMA_MAX\t{:.6f}\n'.format(gamma + np.power(0.1,5-self.get_order(gamma))))
             
-            modelfile.write('PA_MIN\t{:.6f}\n'.format(pa - np.power(0.1,5-self.get_order(pa))))
-            modelfile.write('PA_MAX\t{:.6f}\n'.format(pa + np.power(0.1,5-self.get_order(pa))))
+            pa_mean, pa_std = self.circular_mean_and_std(pa_array)
+            
+            if pa_std>0.000001:
+                modelfile.write('PA_MIN\t{:.6f}\n'.format(pa_mean - pa_std))
+                modelfile.write('PA_MAX\t{:.6f}\n'.format(pa_mean + pa_std))
+            else:
+                modelfile.write('PA_MIN\t{:.6f}\n'.format(pa_mean - np.power(0.1,5-self.get_order(pa_mean))))
+                modelfile.write('PA_MAX\t{:.6f}\n'.format(pa_mean + np.power(0.1,5-self.get_order(pa_mean))))
+            
             
             if constrain_vdisp == True:
                 # vdisp take median value of all effective samples
@@ -644,6 +672,30 @@ class PreBlobby3D:
     #print(get_order(67))   # Output: 1
     #print(get_order(3))    # Output: 0
     #print(get_order(0.3))  # Output: -1
+    
+    def circular_mean_and_std(self,angles_rad):
+        x = np.cos(angles_rad)
+        y = np.sin(angles_rad)
+        
+        # Compute the mean direction
+        mean_x = np.mean(x)
+        mean_y = np.mean(y)
+        
+        # Mean angle in radians
+        mean_angle_rad = np.arctan2(mean_y, mean_x)
+        
+        # the above func return [-pi,pi], but I prefer[0,2pi], so plus
+        # 2pi for negative angles.....
+        if mean_angle_rad<0:
+            mean_angle_rad = mean_angle_rad + 2*np.pi
+        
+        # Resultant vector length
+        R = np.sqrt(mean_x**2 + mean_y**2)
+        
+        # Circular standard deviation in radians
+        circular_std_rad = np.sqrt(-2 * np.log(R))
+        
+        return mean_angle_rad, circular_std_rad
         
     def dn4_options(self,mask_dilated_mask=True):
         modelfile = open(self.save_path+"OPTIONS","w")
@@ -671,7 +723,7 @@ class PreBlobby3D:
                 iterations = 20000
             else:
                 iterations = 25000
-        elif self.emi_line=='Oii':
+        elif self.emi_line=='Oii' or self.emi_line=='Hb':
             if npixel <= 300:
                 iterations = 5000
             elif npixel <= 400:
