@@ -71,7 +71,11 @@ def E_B_V_with_error(ha, hb, ha_err, hb_err):
     balmer_decre = ha/hb
     
     # no negative correction
-    balmer_decre[(ha/hb)<2.86] = 2.86
+    if balmer_decre.size == 1:
+        if balmer_decre < 2.86:
+            balmer_decre = 2.86
+    else:
+        balmer_decre[(ha/hb)<2.86] = 2.86
     
     E_B_V = 2.5/khb_kha * np.log10(balmer_decre/(2.86))
     
