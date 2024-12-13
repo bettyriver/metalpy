@@ -494,7 +494,7 @@ class PreBlobby3D:
 
     def model_options(self,inc_path,flat_vdisp=True,psfimg=True,gaussian=2,
                       constrain_kinematics=None,constrain_vdisp=False,
-                      constrain_pa=None):
+                      constrain_pa=None,vsys_set=None):
         
         
         '''emi_line: Ha or Oii
@@ -648,7 +648,8 @@ class PreBlobby3D:
                 vdisp = kinematics_df['VDISP0'].median()
                 modelfile.write('LOGVDISP0_MIN\t{:.6f}\n'.format(vdisp - np.power(0.1,5-self.get_order(vdisp))))
                 modelfile.write('LOGVDISP0_MAX\t{:.6f}\n'.format(vdisp + np.power(0.1,5-self.get_order(vdisp))))
-            
+        if vsys_set is not None:
+            modelfile.write('VSYS_MAX\t{:.1f}\n'.format(vsys_set))
             
             
         

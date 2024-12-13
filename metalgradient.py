@@ -1314,7 +1314,7 @@ def linear_func(x, a, b):
 def axplot_bin_metal_with_err(ax,metal_map,metal_err_map,ha_map,radius_map,
                               title,re_kpc,R='N2O2',
                      legend=False,get_arraylenth=False,overplotax=None,
-                     radius_fill_perc=0.8,plot_indivspax=False):
+                     radius_fill_perc=0.8,plot_indivspax=False,fit_param=True):
     '''
     
     overplotax: the ax of plot which I want to plot the metal gradient fitting
@@ -1376,16 +1376,16 @@ def axplot_bin_metal_with_err(ax,metal_map,metal_err_map,ha_map,radius_map,
     ax.errorbar(radius_array, metal_mean,
                     yerr=metal_mean_err,fmt='none',c='b',zorder=5)
     ax.scatter(radius_array,metal_mean,
-                   c='b',label='unweigted',zorder=5)
+                   c='b',zorder=5)
     
     ax.errorbar(radius_array+0.05,metal_ha_ave,yerr=metal_ha_ave_err,fmt='none',
                 c='r',zorder=5)
-    ax.scatter(radius_array+0.05,metal_ha_ave,label='ha weight',
+    ax.scatter(radius_array+0.05,metal_ha_ave,
                    c='r',zorder=5)
     
     ax.errorbar(radius_array+0.1,metal_inv_var,yerr=metal_inv_var_err,fmt='none',
                 c='orange',zorder=5)
-    ax.scatter(radius_array+0.1,metal_inv_var,label='inv var weight',
+    ax.scatter(radius_array+0.1,metal_inv_var,
                    c='orange',zorder=5)
     
     # the radius_array is like [0.5,1.5,2.5]
@@ -1396,11 +1396,11 @@ def axplot_bin_metal_with_err(ax,metal_map,metal_err_map,ha_map,radius_map,
     
     
     ax.plot(plot_radius_array, linear_func(plot_radius_array, *popt_mean), 
-                color='b', linestyle='--',zorder=6)
+                color='b', linestyle='--',zorder=6,label='unweighted')
     ax.plot(plot_radius_array, linear_func(plot_radius_array, *popt_haweight), 
-                color='r', linestyle='--',zorder=6)
+                color='r', linestyle='--',zorder=6,label='H$\\alpha$ weighted')
     ax.plot(plot_radius_array, linear_func(plot_radius_array, *popt_inv), 
-                color='orange', linestyle='--',zorder=6)
+                color='orange', linestyle='--',zorder=6,label='inverse variance weighted')
     
     if overplotax is not None:
         overplotax.plot(plot_radius_array, linear_func(plot_radius_array, *popt_mean), 
@@ -1410,26 +1410,26 @@ def axplot_bin_metal_with_err(ax,metal_map,metal_err_map,ha_map,radius_map,
         overplotax.plot(plot_radius_array, linear_func(plot_radius_array, *popt_inv), 
                     color='orange', linestyle='--')
         
+    if fit_param:
         
+        ax.text(0.5, 0.1, 'y=({:.2f}$\pm${:.2f})x + ({:.2f}$\pm${:.2f})'.format(a_mean,a_mean_err,b_mean,b_mean_err), 
+                horizontalalignment='center',
+         verticalalignment='center', transform=ax.transAxes,c='b',fontsize=17)
         
-    ax.text(0.5, 0.1, 'y=({:.2f}$\pm${:.2f})x + ({:.2f}$\pm${:.2f})'.format(a_mean,a_mean_err,b_mean,b_mean_err), 
-            horizontalalignment='center',
-     verticalalignment='center', transform=ax.transAxes,c='b',fontsize=17)
-    
-    ax.text(0.5, 0.2, 'y=({:.2f}$\pm${:.2f})x + ({:.2f}$\pm${:.2f})'.format(a_haweight,a_haweight_err,b_haweight,b_haweight_err), 
-            horizontalalignment='center',
-     verticalalignment='center', transform=ax.transAxes,c='r',fontsize=17)
-    
-    ax.text(0.5, 0.3, 'y=({:.2f}$\pm${:.2f})x + ({:.2f}$\pm${:.2f})'.format(a_inv,a_inv_err,b_inv,b_inv_err), 
-            horizontalalignment='center',
-     verticalalignment='center', transform=ax.transAxes,c='orange',fontsize=17)
+        ax.text(0.5, 0.2, 'y=({:.2f}$\pm${:.2f})x + ({:.2f}$\pm${:.2f})'.format(a_haweight,a_haweight_err,b_haweight,b_haweight_err), 
+                horizontalalignment='center',
+         verticalalignment='center', transform=ax.transAxes,c='r',fontsize=17)
+        
+        ax.text(0.5, 0.3, 'y=({:.2f}$\pm${:.2f})x + ({:.2f}$\pm${:.2f})'.format(a_inv,a_inv_err,b_inv,b_inv_err), 
+                horizontalalignment='center',
+         verticalalignment='center', transform=ax.transAxes,c='orange',fontsize=17)
     
     
     
     if legend:
-        ax.legend()
+        ax.legend(prop={'size': 12})
     ax.set_xlabel('radius [kpc]')
-    ax.set_ylabel('log10(O/H)+12')
+    ax.set_ylabel('12+log(O/H)')
     ax.set_title(title)
     ax.set_ylim(7.0,9.3)
     ax.axvline(x=re_kpc,ymin=0,ymax=1,
@@ -2016,20 +2016,21 @@ def find_half_dex_radius(err_array):
         # all <=0.5
         return len(err_array)
     else:
-        return index_array[0][0]+1
+        return index_array[0][0]
         
 
 def axplot_sumflux_bin_metal(ax, metal_mean, metal_mean_err,title,re_kpc,
-                             radius_array, R='N2O2',legend=False):
+                             radius_array, R='N2O2',legend=False,
+                             set_xylabel=True,color='b',fit_param=True):
     
     
     
     
     
     
-    ax.scatter(radius_array,metal_mean)
+    ax.scatter(radius_array,metal_mean,c=color)
     ax.errorbar(radius_array, metal_mean,
-                    yerr=metal_mean_err,fmt='none',c='b')
+                    yerr=metal_mean_err,fmt='none',c=color)
     
     popt_mean, pcov_mean = curve_fit(linear_func, radius_array, metal_mean,
                                      sigma=metal_mean_err)
@@ -2043,21 +2044,22 @@ def axplot_sumflux_bin_metal(ax, metal_mean, metal_mean_err,title,re_kpc,
     # start from r=0
     
     ax.plot(plot_radius_array, linear_func(plot_radius_array, *popt_mean), 
-                color='b', linestyle='--')
-    
-    ax.text(0.5, 0.1, 'y=({:.2f}$\pm${:.2f})x + ({:.2f}$\pm${:.2f})'.format(a_mean,a_mean_err,b_mean,b_mean_err), 
-            horizontalalignment='center',
-     verticalalignment='center', transform=ax.transAxes,c='b',fontsize=17)
+                color=color, linestyle='--')
+    if fit_param:
+        ax.text(0.5, 0.1, 'y=({:.2f}$\pm${:.2f})x + ({:.2f}$\pm${:.2f})'.format(a_mean,a_mean_err,b_mean,b_mean_err), 
+                horizontalalignment='center',
+         verticalalignment='center', transform=ax.transAxes,c=color,fontsize=12)
     
     
     if legend:
         ax.legend()
-    ax.set_xlabel('radius [kpc]')
-    ax.set_ylabel('log10(O/H)+12')
+    if set_xylabel:
+        ax.set_xlabel('radius [kpc]')
+        ax.set_ylabel('12+log(O/H)')
     ax.set_title(title)
     ax.set_ylim(7.0,9.3)
     ax.axvline(x=re_kpc,ymin=0,ymax=1,
-            linestyle='--',c='g')
+            linestyle='--',c='darkseagreen')
     if R=='N2O2':
         ax.axhline(y=9.23,xmin=0,xmax=1,linestyle='--',c='orange')
         ax.axhline(y=7.63,xmin=0,xmax=1,linestyle='--',c='orange')
@@ -2543,7 +2545,7 @@ def paper_metal_gradient(ha_map,hb_map,oii_map,nii_map,
     ax[0].set_ylabel('N2O2')
     
     ax[0].contour(radius_re, levels=[0.5], colors='r', linewidths=2, linestyles='solid',label='0.5 R$_\mathrm{e}$')
-    ax[0].contour(radius_re, levels=[1], colors='g', linewidths=2, linestyles='dashed',label='1 R$_\mathrm{e}$')
+    ax[0].contour(radius_re, levels=[1], colors='darkseagreen', linewidths=2, linestyles='dashed',label='1 R$_\mathrm{e}$')
     ax[0].contour(radius_re, levels=[1.5], colors='b', linewidths=2, linestyles='dotted',label='1.5 R$_\mathrm{e}$')
     ax[0].scatter(x_cen_pix,y_cen_pix,c='b',marker='x')
     
@@ -2567,13 +2569,15 @@ def paper_metal_gradient(ha_map,hb_map,oii_map,nii_map,
     axplot_sumflux_bin_metal(ax=ax[1], metal_mean=metal_mean_n2o2_dustc[:r_min], 
                              metal_mean_err=metal_mean_err_n2o2_dustc[:r_min], 
                              title='sum flux', re_kpc=re_kpc, 
-                             radius_array=fit_radius_array[:r_min])
+                             radius_array=fit_radius_array[:r_min],fit_param=False,
+                             color='darksalmon')
     
     axplot_bin_metal_with_err(ax=ax[2],metal_map=metal_map_n2o2_gistdust,
                               metal_err_map=metal_err_withdust,
                      ha_map=ha_map,radius_map=radius_kpc,re_kpc=re_kpc,
-                     title='annual bin',R='N2O2',plot_indivspax=True,
-                     radius_fill_perc=indvspax_radius_fill_perc)
+                     title='spaxel average',R='N2O2',plot_indivspax=True,
+                     radius_fill_perc=indvspax_radius_fill_perc,fit_param=False,
+                     legend=True)
     
     
     ##############################
@@ -2589,11 +2593,11 @@ def paper_metal_gradient(ha_map,hb_map,oii_map,nii_map,
                         cmap=cmap.flux)
     cb3 = plt.colorbar(im3,ax=ax[3],fraction=0.047)
     cb3.set_label(label='12+log(O/H)',fontsize=20)
-    ax[3].set_title('metallicity map')
-    ax[3].set_ylabel('N2Ha')
+    #ax[3].set_title('metallicity map')
+    ax[3].set_ylabel('N2H$\\alpha$')
     
     ax[3].contour(radius_re, levels=[0.5], colors='r', linewidths=2, linestyles='solid')
-    ax[3].contour(radius_re, levels=[1], colors='g', linewidths=2, linestyles='dashed')
+    ax[3].contour(radius_re, levels=[1], colors='darkseagreen', linewidths=2, linestyles='dashed')
     ax[3].contour(radius_re, levels=[1.5], colors='b', linewidths=2, linestyles='dotted')
     ax[3].scatter(x_cen_pix,y_cen_pix,c='b',marker='x')
     
@@ -2610,16 +2614,585 @@ def paper_metal_gradient(ha_map,hb_map,oii_map,nii_map,
     axplot_sumflux_bin_metal(ax=ax[4], metal_mean=metal_mean_n2ha[:r_min], 
                              metal_mean_err=metal_mean_err_n2ha[:r_min], 
                              title=None, re_kpc=re_kpc, 
-                             radius_array=fit_radius_array[:r_min],R='N2Ha')
+                             radius_array=fit_radius_array[:r_min],R='N2Ha',
+                             fit_param=False,color='darksalmon')
     
     axplot_bin_metal_with_err(ax=ax[5],metal_map=metal_map_n2ha,
                               metal_err_map=metal_err_n2ha,
                      ha_map=ha_map,radius_map=radius_kpc,re_kpc=re_kpc,
                      title=None,R='N2Ha',plot_indivspax=True,
-                     radius_fill_perc=indvspax_radius_fill_perc)
+                     radius_fill_perc=indvspax_radius_fill_perc,fit_param=False)
     
     fig.suptitle(plot_title)
     if savepath is not None:
         plt.savefig(savepath,dpi=300,bbox_inches='tight')
     
     plt.show()
+
+
+def paperplot_data_sumflux_all(id_list,color='b',savepath=None):
+    
+    gala_num = len(id_list)
+    column_num = int(np.sqrt(gala_num))
+    row_num = int(gala_num/column_num)+1
+    
+    v221_path = '/Users/ymai0110/Documents/Blobby3D/v221/'
+    r50_csv = pd.read_csv(v221_path+'data_from_others/vdisp_sfr_mass_re_combinererun.csv')
+    profit_csv = pd.read_csv('/Users/ymai0110/Documents/Blobby3D/v221/data_from_others/MAGPI_ProfitSersicCat_v0.4.csv',header=None,usecols=[0,2])
+    profit_csv.columns = ['MAGPIID', 're']
+    
+    plt.rcParams.update({'font.size': 25})
+    fig, ax = plt.subplots(row_num,column_num,figsize=(column_num*5,row_num*5), 
+                           gridspec_kw={'wspace':0.3,'hspace':0.35})
+    ax = ax.ravel()
+    v221_path = '/Users/ymai0110/Documents/Blobby3D/v221/'
+    
+    for i, idd in enumerate(id_list):
+        id_str = str(idd)
+    
+        #index = r50_csv['MAGPIID']==idd
+        #re_kpc = r50_csv['R50_conti_profound_kpc'][index]
+        #re_kpc = re_kpc.to_numpy()[0]
+        profound = pd.read_csv(v221_path+'profoundsources_v221/MAGPI'+id_str[:4]+'_profoundsources.csv')
+        z_list = profound['Z']
+        profound_id_list = profound['MAGPIID'].to_numpy()
+        id_index = np.where(profound_id_list==idd)[0][0]
+        z = z_list[id_index]
+        re_profit_arcsec = profit_csv.loc[profit_csv['MAGPIID']==idd,'re'].values[0]
+        re_kpc = arcsec_to_kpc(re_profit_arcsec,z)
+        
+        parent_path = '/Users/ymai0110/Documents/Blobby3D_metal/v221/'
+        metal_csv = pd.read_csv(parent_path + 'metalgradient/allgalaplot_sumflux/'+id_str+'_sumflux.csv')
+        radius_array = metal_csv['r_kpc'].to_numpy()
+        metal_mean = metal_csv['n2o2_dustc_metal'].to_numpy()
+        metal_mean_err = metal_csv['n2o2_dustc_metal_err'].to_numpy()
+        
+        axplot_sumflux_bin_metal(ax=ax[i], metal_mean=metal_mean, 
+                                 metal_mean_err=metal_mean_err, 
+                                 title=id_str, re_kpc=re_kpc, 
+                                 radius_array=radius_array,set_xylabel=False,
+                                 color=color,fit_param=False)
+        if i%column_num==0:
+            ax[i].set_ylabel('log(O/H)+12')
+        if i>=len(id_list)-column_num:
+            ax[i].set_xlabel('radius [kpc]')
+    for i in range(len(id_list),column_num*row_num):
+        ax[i].set_visible(False)
+    
+    if savepath is not None:
+        plt.savefig(savepath,dpi=300,bbox_inches='tight')
+    
+    plt.show()
+    
+    
+    
+
+def data_sumflux(ha_map,hb_map,oii_map,nii_map,
+                                 ha_sn,hb_sn,oii_sn,nii_sn,
+                                 ha_err,hb_err,oii_err,nii_err,
+                                 ha_gist_err,hb_gist_err,oii_gist_err,nii_gist_err,
+                                 pa,x_cen_pix,y_cen_pix,ellip,
+                                 foreground_E_B_V,
+                                 z,re_kpc=None,savepath=None,
+                                 r_option='kpc',plot_title=None,
+                                 limit_metal_range=False,
+                                 savecsv=False,csvpath=None,
+                                 nii_sn_cut=True,
+                                 radius_fill_perc=0.5):
+    
+    plt.rcParams.update({'font.size': 25})
+    
+    # balmer decrement of GIST
+    ha_gist = ha_sn * ha_gist_err
+    hb_gist = hb_sn * hb_gist_err
+    nii_gist = nii_sn * nii_gist_err
+    oii_gist = oii_sn * oii_gist_err
+    
+    dist_arr = ellip_distarr(size=ha_map.shape, centre=(x_cen_pix,y_cen_pix),
+                             ellip=ellip, pa=pa,angle_type='NTE')
+    
+    radius_kpc = pix_to_kpc(radius_in_pix=dist_arr, z=z)
+    radius_re = radius_kpc/re_kpc
+    
+    # get the max radius where ha sn >= 3
+    radius_max_kpc = np.nanmax(radius_kpc[ha_sn>=3])
+    r_set = int(radius_max_kpc)
+    if r_set < 2:
+        r_set = 2
+    radius_array = np.arange(r_set)
+    
+    
+    ##### n2o2 w/o dust correction
+    
+    
+    
+    radius_array_new = []
+    metal_array = []
+    metal_err_array = []
+    for r in radius_array:
+        query = (radius_kpc>=r)&(radius_kpc<r+1)
+        query_all = (radius_kpc>=r)&(radius_kpc<r+1)&(ha_sn>=3)
+        # use radius_fill_perc=0.5 to ensure up to that range have reasonable
+        # blob measurement
+        # the range for gradient measurement will be decide later (err<0.5dex)
+        if len(nii_map[query_all])/len(nii_map[query])<radius_fill_perc:
+            break
+        radius_array_new.append(r)
+        
+        #ha_sum = np.nansum(ha_gist[query_all]) # use gist to calculate balmer
+        #hb_sum = np.nansum(hb_gist[query_all]) # use gist to calculate balmer
+        oii_sum = np.nansum(oii_map[query_all])
+        nii_sum = np.nansum(nii_map[query_all])
+        
+        #ha_err_sum = np.sqrt(np.nansum((ha_err[query_all])**2))
+        #hb_err_sum = np.sqrt(np.nansum((hb_err[query_all])**2))
+        oii_err_sum = np.sqrt(np.nansum((oii_err[query_all])**2))
+        nii_err_sum = np.sqrt(np.nansum((nii_err[query_all])**2))
+    
+        logR_map = np.log10(nii_sum/oii_sum)
+        metal_map_n2o2_nodustc = metal_k19(logR_map)
+        
+        lognii_oii,lognii_oii_err = log10_ratio_with_error(a=nii_sum, b=oii_sum, 
+                                                a_err=nii_err_sum, 
+                                                b_err=oii_err_sum)
+        
+        metal_i, metal_err_nodust = calculate_z_and_error(x=lognii_oii, 
+                                                   x_err=lognii_oii_err, 
+                                                   y=-3.17)
+        
+        metal_array.append(metal_map_n2o2_nodustc)
+        metal_err_array.append(metal_err_nodust)
+    
+    metal_mean_n2o2wodustc = np.array(metal_array)
+    metal_mean_err_n2o2wodustc = np.array(metal_err_array)
+    radius_array = np.array(radius_array_new)
+    
+    #print('n2o2 wo dust')
+    #print(metal_mean.shape)
+    #print(metal_mean_err.shape)
+    #print(radius_array.shape)
+    
+    # center of the bin
+    radius_array = radius_array + 0.5
+    
+    
+    
+    
+    
+    ##### n2o2 with dust correction
+    
+    radius_array_new = []
+    metal_array = []
+    metal_err_array = []
+    radius_array = np.arange(r_set)
+    for r in radius_array:
+        query = (radius_kpc>=r)&(radius_kpc<r+1)
+        query_all = (radius_kpc>=r)&(radius_kpc<r+1)&(ha_sn>=3)
+        if len(nii_map[query_all])/len(nii_map[query])<radius_fill_perc:
+            break
+        radius_array_new.append(r)
+        
+        ha_sum = np.nansum(ha_gist[query_all]) # use gist to calculate balmer
+        hb_sum = np.nansum(hb_gist[query_all]) # use gist to calculate balmer
+        oii_sum = np.nansum(oii_map[query_all])
+        nii_sum = np.nansum(nii_map[query_all])
+        
+        ha_err_sum = np.sqrt(np.nansum((ha_gist_err[query_all])**2)) # use gist err, as use gist flux  
+        hb_err_sum = np.sqrt(np.nansum((hb_gist_err[query_all])**2))
+        oii_err_sum = np.sqrt(np.nansum((oii_err[query_all])**2))
+        nii_err_sum = np.sqrt(np.nansum((nii_err[query_all])**2))
+        
+        
+        ###
+        
+        nii_corr, nii_err_corr = intrinsic_flux_with_err(flux_obs=nii_sum,
+                                                         flux_obs_err=nii_err_sum,
+                                                         wave=emi_wave.nii_wave,
+                                                         ha=ha_sum,hb=hb_sum,
+                                                         ha_err=ha_err_sum,
+                                                         hb_err=hb_err_sum,
+                                    foreground_E_B_V=foreground_E_B_V,z=z)
+        
+        # OII correct 
+        
+        oii_corr, oii_err_corr = intrinsic_flux_with_err(flux_obs=oii_sum,
+                                                         flux_obs_err=oii_err_sum,
+                                                         wave=emi_wave.oii_wave,
+                                                         ha=ha_sum,
+                                                         hb=hb_sum,
+                                                         ha_err=ha_err_sum,
+                                                         hb_err=hb_err_sum,
+                                    foreground_E_B_V=foreground_E_B_V,z=z)
+        
+        logR_map = np.log10(nii_corr/oii_corr)
+        metal_map_n2o2_gistdust = metal_k19(logR_map)
+        
+        # nii_corr/oii_corr with error
+        lognii_oii,lognii_oii_err = log10_ratio_with_error(a=nii_corr, b=oii_corr, 
+                                                a_err=nii_err_corr, 
+                                                b_err=oii_err_corr)
+        
+        metal_i, metal_err_withdust = calculate_z_and_error(x=lognii_oii, 
+                                                   x_err=lognii_oii_err, 
+                                                   y=-3.17)
+        
+        metal_array.append(metal_map_n2o2_gistdust[0])
+        metal_err_array.append(metal_err_withdust[0])
+    
+    
+    
+    
+    
+    metal_mean_n2o2_dustc = np.array(metal_array)
+    metal_mean_err_n2o2_dustc = np.array(metal_err_array)
+    radius_array = np.array(radius_array_new)
+    
+    
+    
+    #center of the bin
+    radius_array = radius_array + 0.5
+    
+    #print('n2o2 with dust')
+    ###print(metal_mean)
+    #print(metal_mean_err)
+    #print(radius_array)
+    #print(metal_mean.shape)
+    #print(metal_mean_err.shape)
+    #print(radius_array.shape)
+    
+    
+    
+    ##### n2ha 
+    
+    
+    radius_array_new = []
+    metal_array = []
+    metal_err_array = []
+    radius_array = np.arange(r_set)
+    for r in radius_array:
+        query = (radius_kpc>=r)&(radius_kpc<r+1)
+        query_all = (radius_kpc>=r)&(radius_kpc<r+1)&(ha_sn>=3)
+        if len(nii_map[query_all])/len(nii_map[query])<radius_fill_perc:
+            break
+        radius_array_new.append(r)
+        
+        ha_sum = np.nansum(ha_map[query_all]) # use b3d to calculate metal!!
+        #hb_sum = np.nansum(hb_gist[query_all]) 
+        #oii_sum = np.nansum(oii_map[query_all])
+        nii_sum = np.nansum(nii_map[query_all])
+        
+        ha_err_sum = np.sqrt(np.nansum((ha_err[query_all])**2))
+        #hb_err_sum = np.sqrt(np.nansum((hb_err[query_all])**2))
+        #oii_err_sum = np.sqrt(np.nansum((oii_err[query_all])**2))
+        nii_err_sum = np.sqrt(np.nansum((nii_err[query_all])**2))
+        
+        
+        lognii_ha,lognii_ha_err = log10_ratio_with_error(a=nii_sum, b=ha_sum, 
+                                                a_err=nii_err_sum, 
+                                                b_err=ha_err_sum)
+        
+        metal_map_n2ha, metal_err_n2ha = calculate_z_and_error(x=lognii_ha, 
+                                                   x_err=lognii_ha_err, 
+                                                   y=-3.17,R='N2Ha')
+    
+        
+        
+        metal_array.append(metal_map_n2ha)
+        metal_err_array.append(metal_err_n2ha)
+    
+    metal_mean_n2ha = np.array(metal_array)
+    metal_mean_err_n2ha = np.array(metal_err_array)
+    radius_array = np.array(radius_array_new)
+    
+    
+    
+    
+    # center of the bin
+    radius_array = radius_array + 0.5
+    
+    #print('n2ha')
+    #print(metal_mean)
+    #print(metal_mean_err)
+    #print(radius_array)
+    #print(metal_mean.shape)
+    #print(metal_mean_err.shape)
+    #print(radius_array.shape)
+    
+    
+    #### decide the radius to fit
+    
+    r1 = find_half_dex_radius(metal_mean_err_n2o2wodustc)
+    r2 = find_half_dex_radius(metal_mean_err_n2o2_dustc)
+    r3 = find_half_dex_radius(metal_mean_err_n2ha)
+    r_min = min(r1,r2,r3)
+    if r_min<3:
+        r_min=3
+    
+    
+    
+    fit_radius_array = np.array(radius_array_new)+0.5
+    if savecsv:
+    
+        df = pd.DataFrame({'r_kpc':fit_radius_array[:r_min],
+                           'n2o2_nodustc_metal':metal_mean_n2o2wodustc[:r_min],
+                           'n2o2_nodustc_metal_err':metal_mean_err_n2o2wodustc[:r_min],
+                           'n2o2_dustc_metal':metal_mean_n2o2_dustc[:r_min],
+                           'n2o2_dustc_metal_err':metal_mean_err_n2o2_dustc[:r_min],
+                           'n2ha_metal':metal_mean_n2ha[:r_min],
+                           'n2ha_metal_err':metal_mean_err_n2ha[:r_min]})
+        df.to_csv(csvpath)
+
+
+def data_annularbin(ha_map,hb_map,oii_map,nii_map,
+                                 ha_sn,hb_sn,oii_sn,nii_sn,
+                                 ha_err,hb_err,oii_err,nii_err,
+                                 ha_gist_err,hb_gist_err,oii_gist_err,nii_gist_err,
+                                 pa,x_cen_pix,y_cen_pix,ellip,
+                                 foreground_E_B_V,
+                                 z,re_kpc=None,savepath=None,
+                                 ha_gist=None,hb_gist=None,oii_gist=None,
+                                 nii_gist=None,
+                                 r_option='kpc',plot_title=None,
+                                 limit_metal_range=False,
+                                 savecsv=False,csvpath=None,
+                                 nii_sn_cut=True,model_flux_sn=False,
+                                 radius_fill_perc=0.8):
+    
+
+    ha_sn_model = ha_map/ha_err
+    hb_sn_model = hb_map/hb_err
+    nii_sn_model = nii_map/nii_err
+    oii_sn_model = oii_map/oii_err
+    
+    
+    plt.rcParams.update({'font.size': 25})
+    
+    dist_arr = ellip_distarr(size=ha_map.shape, centre=(x_cen_pix,y_cen_pix),
+                             ellip=ellip, pa=pa,angle_type='NTE')
+    
+    radius_kpc = pix_to_kpc(radius_in_pix=dist_arr, z=z)
+    radius_re = radius_kpc/re_kpc
+    
+    
+    
+    
+    
+    ##############################
+    # NII/OII map
+    
+    
+    ##############################
+    # balmer decrement of GIST
+    #ha_gist = ha_sn * ha_err
+    #hb_gist = hb_sn * hb_err
+    #nii_gist = nii_sn * nii_err
+    #oii_gist = oii_sn * oii_err
+    
+    
+    
+    ##############################
+    # metal n2o2 as func of radius, without dust correction
+    
+    logR_map = np.log10(nii_map/oii_map)
+    metal_map_n2o2_nodustc = metal_k19(logR_map)
+    
+    if model_flux_sn:
+        if nii_sn_cut:
+            query = (ha_sn_model>=3) & (hb_sn_model>=3) & (oii_sn_model>=3) & (nii_sn_model>=3)
+        else:
+            query = (ha_sn_model>=3) & (hb_sn_model>=3) & (oii_sn_model>=3)
+    else:
+        if nii_sn_cut:
+            query = (ha_sn>=3) & (hb_sn>=3) & (oii_sn>=3) & (nii_sn>=3)
+        else:
+            query = (ha_sn>=3) & (hb_sn>=3) & (oii_sn>=3)
+    
+    mask_region = ~query
+    
+    metal_map_n2o2_nodustc[mask_region] = np.nan
+    
+    radius_kpc = pix_to_kpc(radius_in_pix=dist_arr, z=z)
+    radius_re = radius_kpc/re_kpc
+    
+    # get metal error
+    #nii_err_map = nii_map/nii_sn # wrong !!! can't divide by nii_sn, could be 0
+    #oii_err_map = oii_map/oii_sn
+    
+    
+    
+    
+    lognii_oii,lognii_oii_err = log10_ratio_with_error(a=nii_map, b=oii_map, 
+                                            a_err=nii_err, 
+                                            b_err=oii_err)
+    
+    metal_i, metal_err_nodust = calculate_z_and_error(x=lognii_oii, 
+                                               x_err=lognii_oii_err, 
+                                               y=-3.17)
+    
+    
+    
+    
+    ##############################
+    # metal n2o2 as func of radius, with gist dust correction and err calculation
+    
+    # NII correct
+    nii_corr, nii_err_corr = intrinsic_flux_with_err(flux_obs=nii_map,
+                                                     flux_obs_err=nii_err,
+                                                     wave=emi_wave.nii_wave,
+                                                     ha=ha_gist,hb=hb_gist,
+                                                     ha_err=ha_gist_err,hb_err=hb_gist_err,
+                                foreground_E_B_V=foreground_E_B_V,z=z)
+    
+    # OII correct 
+    
+    oii_corr, oii_err_corr = intrinsic_flux_with_err(flux_obs=oii_map,
+                                                     flux_obs_err=oii_err,
+                                                     wave=emi_wave.oii_wave,
+                                                     ha=ha_gist,hb=hb_gist,
+                                                     ha_err=ha_gist_err,hb_err=hb_gist_err,
+                                foreground_E_B_V=foreground_E_B_V,z=z)
+    
+    logR_map = np.log10(nii_corr/oii_corr)
+    metal_map_n2o2_gistdust = metal_k19(logR_map)
+    
+    #if nii_sn_cut:
+    #    query = (ha_sn>=3) & (hb_sn>=3) & (oii_sn>=3) & (nii_sn>=3)
+    #else:
+    #    query = (ha_sn>=3) & (hb_sn>=3) & (oii_sn>=3)
+    
+    mask_region = ~query
+    
+    metal_map_n2o2_gistdust[mask_region] = np.nan
+    
+    radius_kpc = pix_to_kpc(radius_in_pix=dist_arr, z=z)
+    radius_re = radius_kpc/re_kpc
+    
+    
+    # nii_corr/oii_corr with error
+    lognii_oii,lognii_oii_err = log10_ratio_with_error(a=nii_corr, b=oii_corr, 
+                                            a_err=nii_err_corr, 
+                                            b_err=oii_err_corr)
+    
+    metal_i, metal_err_withdust = calculate_z_and_error(x=lognii_oii, 
+                                               x_err=lognii_oii_err, 
+                                               y=-3.17)
+    
+    
+    ##############################
+    # metal gradient - n2ha
+    
+    if model_flux_sn:
+        metal_map_n2ha = get_metal_map_n2ha(ha_map=ha_map,nii_map=nii_map,ha_sn=ha_sn_model,
+                                       nii_sn=nii_sn_model)
+    else:
+        metal_map_n2ha = get_metal_map_n2ha(ha_map=ha_map,nii_map=nii_map,ha_sn=ha_sn,
+                                       nii_sn=nii_sn)
+    
+    #nii_err_map = nii_map/nii_sn
+    #ha_err_map = ha_map/ha_sn
+    
+    lognii_ha,lognii_ha_err = log10_ratio_with_error(a=nii_map, b=ha_map, 
+                                            a_err=nii_err, 
+                                            b_err=ha_err)
+    
+    metal_i, metal_err_n2ha = calculate_z_and_error(x=lognii_ha, 
+                                               x_err=lognii_ha_err, 
+                                               y=-3.17,R='N2Ha')
+    
+    
+    
+    savedata_bin_metal_with_err(metal_map=metal_map_n2o2_nodustc,
+                              metal_err_map=metal_err_nodust,
+                     ha_map=ha_map,radius_map=radius_kpc,re_kpc=re_kpc,
+                     title='n2o2 w/o dust c',R='N2O2',
+                     radius_fill_perc=radius_fill_perc,
+                     savecsvpath=csvpath+'n2o2_nodustc.csv')
+    
+    savedata_bin_metal_with_err(metal_map=metal_map_n2o2_gistdust,
+                              metal_err_map=metal_err_withdust,
+                     ha_map=ha_map,radius_map=radius_kpc,re_kpc=re_kpc,
+                     title='n2o2 with gist dust c',R='N2O2',
+                     radius_fill_perc=radius_fill_perc,
+                     savecsvpath=csvpath+'n2o2_dustc.csv')
+    
+    savedata_bin_metal_with_err(metal_map=metal_map_n2ha,
+                              metal_err_map=metal_err_n2ha,
+                     ha_map=ha_map,radius_map=radius_kpc,re_kpc=re_kpc,
+                     title='n2ha',R='N2Ha',
+                     radius_fill_perc=radius_fill_perc,
+                     savecsvpath=csvpath+'n2ha.csv')
+    
+    
+    
+    
+def savedata_bin_metal_with_err(metal_map,metal_err_map,ha_map,radius_map,
+                              title,re_kpc,R='N2O2',
+                     legend=False,get_arraylenth=False,overplotax=None,
+                     radius_fill_perc=0.8,plot_indivspax=False,savefitspath=None,
+                     savecsvpath=None):
+    '''
+    
+    savefitspath: save the fits file of metallicity map
+    savecsvpath: save the radius vs metallicity data as csv file
+    
+    '''
+    if savefitspath is not None:
+        # to do
+        
+        todo=0
+    
+    
+    
+    metal_mean, metal_mean_err, radius_array = get_bin_metal_with_err(
+        metal_map=metal_map,metal_err_map=metal_err_map,ha_map=ha_map,
+        radius_map=radius_map, radius_fill_perc=radius_fill_perc,weight_mode='no')
+    #print('unweighted: mean_array, err_aray')
+    #print(metal_mean)
+    #print(metal_mean_err)
+    
+    metal_inv_var, metal_inv_var_err, radius_array = get_bin_metal_with_err(
+        metal_map=metal_map,metal_err_map=metal_err_map,ha_map=ha_map,
+        radius_map=radius_map, radius_fill_perc=radius_fill_perc,weight_mode='inv_var')
+    #print('inverse variance weighted')
+    #print(metal_inv_var)
+    #print(metal_inv_var_err)
+    
+    metal_ha_ave, metal_ha_ave_err, radius_array = get_bin_metal_with_err(
+        metal_map=metal_map,metal_err_map=metal_err_map,ha_map=ha_map,
+        radius_map=radius_map, radius_fill_perc=radius_fill_perc,weight_mode='ha')
+    
+    if savecsvpath is not None:
+        df = pd.DataFrame({'radius_kpc':radius_array,
+                           'metal_mean':metal_mean,
+                           'metal_mean_err':metal_mean_err,
+                           'metal_inv_var':metal_inv_var,
+                           'metal_inv_var_err':metal_inv_var_err,
+                           'metal_ha_ave':metal_ha_ave,
+                           'metal_ha_ave_err':metal_ha_ave_err})
+        df.to_csv(savecsvpath)
+
+def get_combined_csv(path,display=False):
+    import glob
+    #parent_path = '/Users/ymai0110/Documents/Blobby3D_metal/v221/'
+    #csv_path = parent_path + 'plots/metalgradient/'+path+'/'
+    # Specify the path to your CSV files
+    csv_files_path = path+'*.csv'
+    
+    # Get a list of all CSV files in the specified path
+    csv_files = glob.glob(csv_files_path)
+    
+    # Initialize an empty list to store individual DataFrames
+    dataframes = []
+    
+    # Loop through the list of CSV files and read each into a DataFrame
+    for file in csv_files:
+        df = pd.read_csv(file)
+        dataframes.append(df)
+    
+    # Concatenate all DataFrames into one
+    combined_df = pd.concat(dataframes, ignore_index=True)
+    
+    # Display the combined DataFrame
+    if display:
+        print(combined_df)
+    return combined_df
