@@ -28,6 +28,7 @@ import pandas as pd
 from astropy.cosmology import LambdaCDM
 lcdm = LambdaCDM(70,0.3,0.7)
 import astropy.units as u
+import astropy.cosmology.units as cu
 from dust_extinction.parameter_averages import F19
 from scipy.optimize import curve_fit
 from metal_uncertainty import intrinsic_flux_with_err
@@ -1412,17 +1413,18 @@ def axplot_bin_metal_with_err(ax,metal_map,metal_err_map,ha_map,radius_map,
         
     if fit_param:
         
-        ax.text(0.5, 0.1, 'y=({:.2f}$\pm${:.2f})x + ({:.2f}$\pm${:.2f})'.format(a_mean,a_mean_err,b_mean,b_mean_err), 
-                horizontalalignment='center',
-         verticalalignment='center', transform=ax.transAxes,c='b',fontsize=17)
+        #ax.text(0.5, 0.1, 'y=({:.2f}$\pm${:.2f})x + ({:.2f}$\pm${:.2f})'.format(a_mean,a_mean_err,b_mean,b_mean_err), 
+        #        horizontalalignment='center',
+        # verticalalignment='center', transform=ax.transAxes,c='b',fontsize=17)
         
-        ax.text(0.5, 0.2, 'y=({:.2f}$\pm${:.2f})x + ({:.2f}$\pm${:.2f})'.format(a_haweight,a_haweight_err,b_haweight,b_haweight_err), 
-                horizontalalignment='center',
-         verticalalignment='center', transform=ax.transAxes,c='r',fontsize=17)
+        #ax.text(0.5, 0.2, 'y=({:.2f}$\pm${:.2f})x + ({:.2f}$\pm${:.2f})'.format(a_haweight,a_haweight_err,b_haweight,b_haweight_err), 
+        #        horizontalalignment='center',
+        # verticalalignment='center', transform=ax.transAxes,c='r',fontsize=17)
         
-        ax.text(0.5, 0.3, 'y=({:.2f}$\pm${:.2f})x + ({:.2f}$\pm${:.2f})'.format(a_inv,a_inv_err,b_inv,b_inv_err), 
+        ax.text(0.5, 0.35, 'y=({:.3f}$\pm${:.3f})x + ({:.3f}$\pm${:.3f})'.format(a_inv,a_inv_err,b_inv,b_inv_err), 
                 horizontalalignment='center',
-         verticalalignment='center', transform=ax.transAxes,c='orange',fontsize=17)
+         verticalalignment='center', transform=ax.transAxes,c='orange',fontsize=14,
+             bbox=dict(facecolor='white', edgecolor='white', boxstyle='round,pad=0.3'))
     
     
     
@@ -1674,7 +1676,129 @@ def dust_correction(flux,E_B_V,wavelength):
                                             Ebv=E_B_V)
     flux_correct = flux_correct.value
     return flux_correct
+
+
+
+
+def SFR_gradient_sumflux(ha_map,ha_err,ha_sn,hb_sn,ha_gist_err,hb_gist_err,
+                         pa,x_cen_pix,y_cen_pix,ellip,
+                         foreground_E_B_V,z,gradient_radius,
+                         re_kpc=None,savepath=None,r_option='kpc',
+                         savecsv=False,csvpath=None,magpiid=None):
     
+    '''
+    ha_map: ha flux map from b3d
+    ha_err: ha flux err from b3d
+    ha_sn: ha sn from gist
+    ha_gist_err: ha flux err from gist
+    gradient_radius: int, the radius in kpc that we measure metal gradient
+    magpiid: str of magpiid
+    -----
+    
+    no, it's wrong to use sumflux method to calculate SFR gradient...
+    
+    can't even use SFR per pixel to get gradient, as the inclination influence
+    the SFR per pixel, it's not SFR per unit area...
+    
+    need to modify this function.... 
+    
+    
+    '''
+    
+    # balmer decrement of GIST
+    ha_gist = ha_sn * ha_gist_err
+    hb_gist = hb_sn * hb_gist_err
+    
+    dist_arr = ellip_distarr(size=ha_map.shape, centre=(x_cen_pix,y_cen_pix),
+                             ellip=ellip, pa=pa,angle_type='NTE')
+    
+    radius_kpc = pix_to_kpc(radius_in_pix=dist_arr, z=z)
+    radius_re = radius_kpc/re_kpc
+    
+    ##### SFR with dust correction
+    r_set = gradient_radius
+    radius_array_new = []
+    SFR_array = []
+    SFR_err_array = []
+    radius_array = np.arange(r_set)
+    for r in radius_array:
+        query = (radius_kpc>=r)&(radius_kpc<r+1)
+        query_all = (radius_kpc>=r)&(radius_kpc<r+1)&(ha_sn>=3)
+        
+        radius_array_new.append(r)
+        ha_sum = np.nansum(ha_map[query_all])
+        ha_gist_sum = np.nansum(ha_gist[query_all]) # use gist to calculate balmer
+        hb_gist_sum = np.nansum(hb_gist[query_all]) # use gist to calculate balmer
+        
+        ha_err_sum = np.sqrt(np.nansum((ha_err[query_all])**2))
+        ha_gist_err_sum = np.sqrt(np.nansum((ha_gist_err[query_all])**2)) # use gist err, as use gist flux  
+        hb_gist_err_sum = np.sqrt(np.nansum((hb_gist_err[query_all])**2))
+        
+        
+        ###
+        ha_corr, ha_err_corr = intrinsic_flux_with_err(flux_obs=ha_sum, 
+                                                       flux_obs_err=ha_err_sum, 
+                                                       wave=emi_wave.ha_wave, 
+                                                       ha=ha_gist_sum, 
+                                                       hb=hb_gist_sum, 
+                                                       ha_err=ha_gist_err_sum, 
+                                                       hb_err=hb_gist_err_sum, 
+                                                       foreground_E_B_V=foreground_E_B_V, 
+                                                       z=z)
+        
+        
+        ha_lumi = flux_to_luminosity(ha_corr, z)
+        ha_lumi_err = flux_to_luminosity(ha_err_corr, z)
+        
+        SFR = luminosity_to_SFR(ha_lumi)
+        SFR_err = luminosity_to_SFR(ha_lumi_err)
+        
+        
+        
+        
+        
+        
+        SFR_array.append(SFR)
+        SFR_err_array.append(SFR_err)
+    
+    #### gradient SFR with dust corr
+    fit_radius_array = radius_array + 0.5
+    popt_mean, pcov_mean = curve_fit(linear_func, fit_radius_array, SFR_array,
+                                     sigma=SFR_err_array)
+    a_mean, b_mean = popt_mean
+    a_mean_err, b_mean_err = np.sqrt(np.diag(pcov_mean))
+    
+    df = pd.DataFrame({'MAGPIID':[int(magpiid)]})
+    
+    df['SFR_gradient'] = a_mean
+    df['SFR_gradient_err'] = a_mean_err
+    df['SFR_centre'] = b_mean
+    df['SFR_centre_err'] = b_mean_err
+    
+    if savecsv:
+        df.to_csv(csvpath+magpiid+'.csv')
+    
+    
+    return 0
+
+
+def flux_to_luminosity(flux_map,z):
+    z = z * cu.redshift
+    from astropy.cosmology import LambdaCDM
+    lcdm = LambdaCDM(70,0.3,0.7)
+    # the unit of flux is 10^-20 erg/s/cm^2
+    d = z.to(u.cm, cu.redshift_distance(lcdm, kind="luminosity"))
+    #d = lcdm.luminosity_distance(z)
+    lumi_map = flux_map * 1e-20 * 4 * np.pi * (d.value)**2
+    
+    return lumi_map
+
+
+def luminosity_to_SFR(lumi):
+    # from Mun et al. 2024
+    SFR = lumi/(1.26 * 1e41 * 1.53)
+    
+    return SFR
     
 def diagnostic_map_sumflux(ha_map,hb_map,oii_map,nii_map,
                                  ha_sn,hb_sn,oii_sn,nii_sn,
@@ -2046,9 +2170,10 @@ def axplot_sumflux_bin_metal(ax, metal_mean, metal_mean_err,title,re_kpc,
     ax.plot(plot_radius_array, linear_func(plot_radius_array, *popt_mean), 
                 color=color, linestyle='--')
     if fit_param:
-        ax.text(0.5, 0.1, 'y=({:.2f}$\pm${:.2f})x + ({:.2f}$\pm${:.2f})'.format(a_mean,a_mean_err,b_mean,b_mean_err), 
+        ax.text(0.5, 0.35, 'y=({:.3f}$\pm${:.3f})x + ({:.3f}$\pm${:.3f})'.format(a_mean,a_mean_err,b_mean,b_mean_err), 
                 horizontalalignment='center',
-         verticalalignment='center', transform=ax.transAxes,c=color,fontsize=12)
+         verticalalignment='center', transform=ax.transAxes,c=color,fontsize=14,
+             bbox=dict(facecolor='white', edgecolor='white', boxstyle='round,pad=0.3'))
     
     
     if legend:
@@ -2266,7 +2391,7 @@ def paper_metal_gradient(ha_map,hb_map,oii_map,nii_map,
                                  savecsv=False,csvpath=None,
                                  nii_sn_cut=True,model_flux_sn=False,
                                  sumflux_radius_fill_perc=0.5,
-                                 indvspax_radius_fill_perc=0.5):
+                                 indvspax_radius_fill_perc=0.5,fit_param=True):
     '''
     ha_map: flux map from b3d
     ha_sn: flux/err from gist
@@ -2569,14 +2694,14 @@ def paper_metal_gradient(ha_map,hb_map,oii_map,nii_map,
     axplot_sumflux_bin_metal(ax=ax[1], metal_mean=metal_mean_n2o2_dustc[:r_min], 
                              metal_mean_err=metal_mean_err_n2o2_dustc[:r_min], 
                              title='sum flux', re_kpc=re_kpc, 
-                             radius_array=fit_radius_array[:r_min],fit_param=False,
+                             radius_array=fit_radius_array[:r_min],fit_param=fit_param,
                              color='darksalmon')
     
     axplot_bin_metal_with_err(ax=ax[2],metal_map=metal_map_n2o2_gistdust,
                               metal_err_map=metal_err_withdust,
                      ha_map=ha_map,radius_map=radius_kpc,re_kpc=re_kpc,
                      title='spaxel average',R='N2O2',plot_indivspax=True,
-                     radius_fill_perc=indvspax_radius_fill_perc,fit_param=False,
+                     radius_fill_perc=indvspax_radius_fill_perc,fit_param=fit_param,
                      legend=True)
     
     
@@ -2615,13 +2740,13 @@ def paper_metal_gradient(ha_map,hb_map,oii_map,nii_map,
                              metal_mean_err=metal_mean_err_n2ha[:r_min], 
                              title=None, re_kpc=re_kpc, 
                              radius_array=fit_radius_array[:r_min],R='N2Ha',
-                             fit_param=False,color='darksalmon')
+                             fit_param=fit_param,color='darksalmon')
     
     axplot_bin_metal_with_err(ax=ax[5],metal_map=metal_map_n2ha,
                               metal_err_map=metal_err_n2ha,
                      ha_map=ha_map,radius_map=radius_kpc,re_kpc=re_kpc,
                      title=None,R='N2Ha',plot_indivspax=True,
-                     radius_fill_perc=indvspax_radius_fill_perc,fit_param=False)
+                     radius_fill_perc=indvspax_radius_fill_perc,fit_param=fit_param)
     
     fig.suptitle(plot_title)
     if savepath is not None:
