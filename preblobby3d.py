@@ -547,6 +547,17 @@ class PreBlobby3D:
                 
                 modelfile.write('PSFWEIGHT\t%f %f\n'%(weight1,weight2))
                 modelfile.write('PSFFWHM\t%f %f\n'%(fwhm1,fwhm2))
+                
+            elif gaussian==1:
+                
+                weight1, fwhm1 = mofgauFit.psf_img_to_gauss(img)
+                
+                modelfile.write('PSFWEIGHT\t%f\n'%(weight1))
+                modelfile.write('PSFFWHM\t%f\n'%(fwhm1))
+                
+                
+                
+                
             else:
                 print('error... Gaussian component num no supported')
             #if gaussian==3:
