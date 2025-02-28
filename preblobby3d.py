@@ -494,7 +494,8 @@ class PreBlobby3D:
 
     def model_options(self,inc_path,flat_vdisp=True,psfimg=True,gaussian=2,
                       constrain_kinematics=None,constrain_vdisp=False,
-                      constrain_pa=None,vsys_set=None):
+                      constrain_pa=None,vsys_set=None,
+                      mavis_test=False):
         
         
         '''emi_line: Ha or Oii
@@ -504,7 +505,7 @@ class PreBlobby3D:
         constrain_vdisp: when constrain_kinematics is not None, constrain
                          vel profile, pa, vdisp
         constrain_pa: constrain pa only
-        
+        mavis_test: the model options set for mavis science project
         
         '''
         
@@ -661,7 +662,17 @@ class PreBlobby3D:
                 modelfile.write('LOGVDISP0_MAX\t{:.6f}\n'.format(vdisp + np.power(0.1,5-self.get_order(vdisp))))
         if vsys_set is not None:
             modelfile.write('VSYS_MAX\t{:.1f}\n'.format(vsys_set))
-            
+        
+        
+        if mavis_test:
+            # set the number of blobs fixed to 300
+            modelfile.write('NMAX\t300\n') 
+            # 1 is true, 0 is false
+            modelfile.write('NFIXED\t1\n') 
+            # 0.02 arcsec, 1/10 of pixel
+            modelfile.write('RADIUSLIM_MIN\t0.02\n') 
+            # 5 arcsec, just a test, need to try different values...
+            modelfile.write('RADIUSLIM_MAX\t5\n') 
             
         
         modelfile.close()
