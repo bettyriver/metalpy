@@ -21,6 +21,20 @@ def two_gaussian(xdata_tuple,A1,A2,sigma1,sigma2):
     f = A1*np.exp(-(x**2+y**2)/2/sigma1**2)+A2*np.exp(-(x**2+y**2)/2/sigma2**2)
     return f.ravel()
 
+def one_gaussian_c(xdata_tuple,A1,sigma1,x0,y0):
+    '''
+    one gaussian, center flexible
+    
+    
+    '''
+    
+    (x, y) = xdata_tuple
+    f = A1*np.exp(-((x-x0)**2+(y-y0)**2)/2/sigma1**2)
+    
+    return f.ravel()
+    
+    
+
 def two_gaussian_c(xdata_tuple,A1,A2,sigma1,sigma2,x0,y0):
     '''
     
@@ -59,11 +73,119 @@ def three_gaussian_c(xdata_tuple,A1,A2,A3,sigma1,sigma2,sigma3,x0,y0):
     f = A1*np.exp(-((x-x0)**2+(y-y0)**2)/2/sigma1**2)+A2*np.exp(-((x-x0)**2+(y-y0)**2)/2/sigma2**2)+A3*np.exp(-((x-x0)**2+(y-y0)**2)/2/sigma3**2)
     return f.ravel()
 
+
+
+def psf_img_to_one_gauss(img,plot=False,magpiid=None):
+    '''
+    img: psf image
+    ---
+    psf img to one Gaussian fitting 
+    
+    
+    
+    '''
+    
+    x = np.arange(img.shape[0]) - img.shape[0]/2
+    y = np.arange(img.shape[1]) - img.shape[1]/2
+    
+    xx, yy = np.meshgrid(x, y)
+    
+    xdata = np.vstack((xx.ravel(),yy.ravel()))
+    ydata = img.ravel()
+    
+    popt, pcov = curve_fit(f=one_gaussian_c,xdata=xdata,ydata=ydata,
+                           bounds=([0,0.1,-5,-5],[np.inf,np.inf,5,5]))
+    
+    t2 = one_gaussian_c(xdata,popt[0],popt[1],popt[2],popt[3]).reshape(img.shape[0],img.shape[1])
+    
+    if plot==True:
+        
+        fig,ax = plt.subplots(1,5,figsize=(18,8))
+        
+        max_v = np.max(img)
+        min_v = np.min(img)
+        
+        im0=ax[0].imshow(img,vmin=min_v, vmax=max_v)
+        cb0 = plt.colorbar(im0,ax=ax[0],fraction=0.047)
+        cb0.ax.locator_params(nbins=5)
+        ax[0].set_title('psf img')
+        
+        
+        
+        im1=ax[1].imshow(t2,vmin=min_v, vmax=max_v)
+        cb1 = plt.colorbar(im1,ax=ax[1],fraction=0.047)
+        cb1.ax.locator_params(nbins=5)
+        ax[1].set_title('one_gaussian')
+        
+        max_res = np.max((img-t2)/t2)
+        
+        im2=ax[2].imshow((img-t2),cmap='RdYlBu',vmin=-0.002,vmax=0.002)
+        cb2 = plt.colorbar(im2,ax=ax[2],fraction=0.047)
+        cb2.ax.locator_params(nbins=5)
+        ax[2].set_title('residual')
+        plt.subplots_adjust(left=0.1,
+                    bottom=0.1, 
+                    right=0.9, 
+                    top=0.9, 
+                    wspace=0.8, 
+                    hspace=0.4)
+        
+        
+        
+        ax[3].plot(x,img[:,int(img.shape[0]/2+0.5)],label='img')
+        ax[3].plot(x,t2[:,int(img.shape[0]/2+0.5)],label='fit')
+        ax[3].legend()
+        
+        ax[4].plot(x,img[:,int(img.shape[0]/2+0.5)],label='img')
+        ax[4].plot(x,t2[:,int(img.shape[0]/2+0.5)],label='fit')
+        ax[4].set_ylim(0,0.002)
+        ax[4].legend()
+        
+        plt.suptitle(str(magpiid))
+        plt.show()
+    
+    
+    max_flux = np.max(img)
+    rr = np.sqrt(xx**2 + yy**2)
+    fwhm = 2*np.min(rr[img < max_flux/2])
+    print(fwhm)
+    print(popt)
+    
+    # wrong !! shouldn't be amplitude of Gaussian 
+    #weight1 = popt[0]/(popt[0]+popt[1])
+    #weight2 = popt[1]/(popt[0]+popt[1])
+    
+    # should be integral of Gaussian over the entire xy plane
+    # integral = A*2*pi*sigma^2
+    
+    
+    # /* don't need to calculate weight for one gaussian... */
+    #integral_1 = popt[0]*2*np.pi*(popt[2]**2)
+    #integral_2 = popt[1]*2*np.pi*(popt[3]**2)
+    #weight1 = integral_1/(integral_1+integral_2)
+    #weight2 = integral_2/(integral_1+integral_2)
+    
+    
+    # 0.2 arcsec per pixel
+    gau_fwhm1 = 2*np.sqrt(2*np.log(2))*np.abs(popt[1])*0.2
+    
+    if (popt[0] < 0) :
+        print('something went wrong!')
+        return 0
+    
+    # weight is 1 for one Gaussian
+    return 1, gau_fwhm1
+    
+    
+
+
+
 def psf_img_to_gauss(img,plot=False,magpiid=None):
     
     '''
     img: psf image
-    
+    ---
+    psf img to two Gaussian fitting (Default)
     
     '''
     x = np.arange(img.shape[0]) - img.shape[0]/2
