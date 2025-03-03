@@ -42,8 +42,9 @@ class PreBlobby3D:
             DESCRIPTION.
         wave_axis : TYPE, optional
             DESCRIPTION. The default is 0.
-        emi_line: Ha or Oii or Hb
-        
+        emi_line: Ha or Oii or Hb or Ha_only
+                Ha: Ha + Nii
+                Ha_only: only Ha
         
         
         Raises
@@ -509,7 +510,7 @@ class PreBlobby3D:
         
         '''
         
-        if self.emi_line =='Ha':
+        if self.emi_line =='Ha' or self.emi_line=='Ha_only':
             emi_line_wave = 6563
             # z-band, is most close to Halpha line at z~0.3
             emi_line_psfband = 3
@@ -551,7 +552,7 @@ class PreBlobby3D:
                 
             elif gaussian==1:
                 
-                weight1, fwhm1 = mofgauFit.psf_img_to_gauss(img)
+                weight1, fwhm1 = mofgauFit.psf_img_to_one_gauss(img)
                 
                 modelfile.write('PSFWEIGHT\t%f\n'%(weight1))
                 modelfile.write('PSFFWHM\t%f\n'%(fwhm1))
@@ -598,6 +599,8 @@ class PreBlobby3D:
         if self.emi_line =='Ha':
             modelfile.write('LINE\t6562.81\n')
             modelfile.write('LINE\t6583.1\t6548.1\t0.333\n')
+        elif self.emi_line=='Ha_only':
+            modelfile.write('LINE\t6562.81\n')
         elif self.emi_line == 'Oii':
             modelfile.write('LINE\t3727.092\n')
             modelfile.write('LINE\t3729.875\n')
@@ -746,7 +749,7 @@ class PreBlobby3D:
                 iterations = 20000
             else:
                 iterations = 25000
-        elif self.emi_line=='Oii' or self.emi_line=='Hb':
+        elif self.emi_line=='Oii' or self.emi_line=='Hb' or self.emi_line=='Ha_only':
             if npixel <= 300:
                 iterations = 5000
             elif npixel <= 400:
