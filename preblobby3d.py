@@ -764,7 +764,7 @@ class PreBlobby3D:
         
         modelfile.write('# File containing parameters for DNest4\n')
         modelfile.write('# Put comments at the top, or at the end of the line.\n')
-        modelfile.write('1	# Number of particles\n')
+        modelfile.write('5	# Number of particles\n')
         modelfile.write('10000	# New level interval\n')
         modelfile.write('10000	# Save interval\n')
         modelfile.write('100	# Thread steps - how many steps each thread should do independently before communication\n')
