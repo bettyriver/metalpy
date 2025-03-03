@@ -126,33 +126,37 @@ def pbs_run_b3d(pbs_path,pbs_name,pbs_file_num,id_pix_sorted,data_path,b3d_path)
     flag = 0
     sum_time = 0
     file_num = 1
-    for flag in range(pbs_file_num):
+    while flag<len(id_pix_sorted[:][1]):
         pbsfile = open(pbs_path+pbs_name+"_"+str(file_num)+'.pbs',"w")
         str_to_write = ''
-        #while True:
-        sum_time += time_calculator(id_pix_sorted[flag][1])
-        str_to_write += 'cd '+data_path+str(int(id_pix_sorted[flag][0]))+'\n'
-        str_to_write += 'export OMP_NUM_THREADS=32\n'
-        str_to_write += '${io}Blobby3D -t 32 -f MODEL_OPTIONS\n'
-            
-        max_pix = id_pix_sorted[flag][1]
+        while True:
+            sum_time += time_calculator(id_pix_sorted[flag][1])
+            str_to_write += 'cd '+data_path+str(int(id_pix_sorted[flag][0]))+'\n'
+            str_to_write += 'export OMP_NUM_THREADS=32\n'
+            str_to_write += '${io}Blobby3D -t 32 -f MODEL_OPTIONS\n'
+                
+            max_pix = id_pix_sorted[flag][1]
+            flag += 1
+            if sum_time>=240:
+                break
+            if flag>=len(id_pix_sorted[:][1]):
+                break
+            if time_calculator(id_pix_sorted[flag][1])>130:
+                break
+            if (sum_time + time_calculator(id_pix_sorted[flag+1][1])) > 230:
+                break
             
         cpu, mem = cpu_mem(max_pix)
         pbsfile.write('#!/bin/bash\n')
         pbsfile.write('#PBS -P blobby3d\n')
-        pbsfile.write('#PBS -N metal_test_con_pa_'+str(file_num)+'\n')
+        pbsfile.write('#PBS -N '+pbs_name+'_'+str(file_num)+'\n')
         pbsfile.write('#PBS -l select=1:ncpus=%d:mem=%dGB\n'%(cpu,mem))
-        if file_num ==7:
-            run_time = int((sum_time+8)*0.7)
-            pbsfile.write('#PBS -l walltime=%d:00:00\n'%(int((sum_time+8)*0.7)))
-        else:
-            run_time = int((sum_time+8)/2)
-            pbsfile.write('#PBS -l walltime=%d:00:00\n'%(int((sum_time+8)/2)))
+        pbsfile.write('#PBS -l walltime=%d:00:00\n'%(int(sum_time)))
         pbsfile.write('#PBS -q defaultQ\n')
         pbsfile.write('io='+b3d_path+'\n')
         pbsfile.write(str_to_write)
         pbsfile.close()
-        print(str(file_num)+': time:'+str(run_time)+' h')
+        print(str(file_num)+': time:'+str(sum_time)+' h')
         sum_time = 0
         file_num += 1
     
@@ -162,3 +166,20 @@ def pbs_run_b3d(pbs_path,pbs_name,pbs_file_num,id_pix_sorted,data_path,b3d_path)
     for i in range(1,pbs_file_num+1):
         shfile.write('qsub '+pbs_name+'_'+str(i)+'.pbs\n')
     shfile.close()
+    
+    # pbs file for copy post.py
+    
+    copy_postpy(data_path,id_pix_sorted[:][0],pbs_path,'cp_postpy_'+pbs_name)
+    
+    
+    # pbs file for submit postblobby3d
+    
+    #arte_data_path='/project/blobby3d/Blobby3D_metal/v221/data_oii_v221_constrain_pa/'
+    shfile = open(pbs_path +'magpi_postprocess_'+pbs_name+'.pbs',"w")
+    shfile.write('#!/bin/bash\n#PBS -P blobby3d\n#PBS -N magpi_postprocess_'+pbs_name+'\n#PBS -l select=1:ncpus=4:mem=30GB\n#PBS -l walltime=2:00:00\n#PBS -q defaultQ\nmodule load python/3.7.7\n')
+    for idd in id_pix_sorted[:][0]:
+        shfile.write('cd '+data_path+str(idd)+'\n')
+        shfile.write('python post.py\n')
+    shfile.close()
+    
+    
