@@ -121,6 +121,8 @@ def pbs_run_b3d(pbs_path,pbs_name,pbs_file_num,id_pix_sorted,data_path,b3d_path)
     
     
     '''
+    
+    # pbs files
     flag = 0
     sum_time = 0
     file_num = 1
@@ -153,3 +155,10 @@ def pbs_run_b3d(pbs_path,pbs_name,pbs_file_num,id_pix_sorted,data_path,b3d_path)
         print(str(file_num)+': time:'+str(run_time)+' h')
         sum_time = 0
         file_num += 1
+    
+    
+    # sh files to submit those pbs file
+    shfile = open(pbs_path+"submit_"+pbs_name+".sh","w")
+    for i in range(1,pbs_file_num+1):
+        shfile.write('qsub '+pbs_name+'_'+str(i)+'.pbs\n')
+    shfile.close()
