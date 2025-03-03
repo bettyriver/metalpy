@@ -108,7 +108,8 @@ def copy_postpy(data_path,id_list,save_path,save_name):
     shfile.close()
 
 
-def pbs_run_b3d(pbs_path,pbs_name,pbs_file_num,id_pix_sorted,data_path,b3d_path):
+def pbs_run_b3d(pbs_path,pbs_name,pbs_file_num,id_pix_sorted,data_path,b3d_path,
+                emi_line):
     '''
     pbs_path: path to write pbs file
     pbs_name: name of pbs file
@@ -131,7 +132,7 @@ def pbs_run_b3d(pbs_path,pbs_name,pbs_file_num,id_pix_sorted,data_path,b3d_path)
         pbsfile = open(pbs_path+pbs_name+"_"+str(file_num)+'.pbs',"w")
         str_to_write = ''
         while True:
-            sum_time += time_calculator(id_pix_sorted[flag][1])
+            sum_time += time_calculator(id_pix_sorted[flag][1],emi_line=emi_line)
             str_to_write += 'cd '+data_path+str(int(id_pix_sorted[flag][0]))+'\n'
             str_to_write += 'export OMP_NUM_THREADS=32\n'
             str_to_write += '${io}Blobby3D -t 32 -f MODEL_OPTIONS\n'
@@ -147,7 +148,7 @@ def pbs_run_b3d(pbs_path,pbs_name,pbs_file_num,id_pix_sorted,data_path,b3d_path)
             if (sum_time + time_calculator(id_pix_sorted[flag+1][1])) > 230:
                 break
             
-        cpu, mem = cpu_mem(max_pix)
+        cpu, mem = cpu_mem(max_pix,emi_line=emi_line)
         pbsfile.write('#!/bin/bash\n')
         pbsfile.write('#PBS -P blobby3d\n')
         pbsfile.write('#PBS -N '+pbs_name+'_'+str(file_num)+'\n')
@@ -171,7 +172,7 @@ def pbs_run_b3d(pbs_path,pbs_name,pbs_file_num,id_pix_sorted,data_path,b3d_path)
     # pbs file for copy post.py
     
     id_list = [row[0] for row in id_pix_sorted]
-    copy_postpy(data_path,id_list,pbs_path,'cp_postpy_'+pbs_name)
+    copy_postpy(data_path,id_list,pbs_path,'cp_postpy_'+pbs_name+'.sh')
     
     
     # pbs file for submit postblobby3d
