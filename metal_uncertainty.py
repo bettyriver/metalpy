@@ -15,6 +15,8 @@ import astropy.units as u
 from dust_extinction.parameter_averages import F19
 from scipy.optimize import curve_fit
 from scipy import interpolate
+from dust_extinction.averages import G03_SMCBar
+from dust_extinction.averages import G03_LMCAvg
 
 
 class emi_wave():
@@ -23,6 +25,10 @@ class emi_wave():
     hb_wave = 4862.683
     ha_wave = 6564.61
     nii_wave = 6585.28
+    oiii_wave = 5007
+    sii_6716_wave = 6716
+    sii_6731_wave = 6731
+    
 
 def log10_ratio_with_error(a, b, a_err, b_err):
     # Calculate the value of log10(a/b)
@@ -34,7 +40,7 @@ def log10_ratio_with_error(a, b, a_err, b_err):
     
     return log10_ratio, log10_ratio_err
 
-def E_B_V_with_error(ha, hb, ha_err, hb_err):
+def E_B_V_with_error(ha, hb, ha_err, hb_err,model='F19'):
     
     '''
     E(B-V) = 2.5/(k(lambda_hb) - k(lambda_ha)) * log10((ha/hb)_obs/(ha/hb)_int)
@@ -64,9 +70,20 @@ def E_B_V_with_error(ha, hb, ha_err, hb_err):
     # F19.evaluate return A(x)/A(V), 
     # we know A(x)/A(V) = k(x-V) / Rv + 1.0
     # so k(lambda_hb) - k(lambda_ha) = formula below
-    ext = F19(Rv=3.1)
-    khb_kha = (ext.evaluate(in_x=hb_wave*u.AA, Rv=Rv) - \
-        ext.evaluate(in_x=ha_wave*u.AA, Rv=Rv)) * Rv
+    if model=='F19':
+        ext = F19(Rv=3.1)
+        khb_kha = (ext.evaluate(in_x=hb_wave*u.AA, Rv=Rv) - \
+            ext.evaluate(in_x=ha_wave*u.AA, Rv=Rv)) * Rv
+    elif model=='SMC':
+        ext = G03_SMCBar()
+        khb_kha = (ext.evaluate(in_x=hb_wave*u.AA) - \
+            ext.evaluate(in_x=ha_wave*u.AA)) * Rv
+    elif model=='LMC':
+        ext = G03_LMCAvg()
+        khb_kha = (ext.evaluate(in_x=hb_wave*u.AA) - \
+            ext.evaluate(in_x=ha_wave*u.AA)) * Rv
+    
+    
     
     balmer_decre = ha/hb
     
@@ -86,7 +103,7 @@ def E_B_V_with_error(ha, hb, ha_err, hb_err):
     return E_B_V, E_B_V_err
 
 def intrinsic_flux_with_err(flux_obs,flux_obs_err,wave,ha,hb,ha_err,hb_err,
-                            foreground_E_B_V,z):
+                            foreground_E_B_V,z,dust_model='F19'):
     '''
     this functioin do two steps of dust correction and calculate the flux err
     1. foreground correction for the dust in the Milky Way
@@ -125,27 +142,43 @@ def intrinsic_flux_with_err(flux_obs,flux_obs_err,wave,ha,hb,ha_err,hb_err,
     
     ha_correct_MW,ha_err_correct_MW = dust_correction(flux=ha, flux_err=ha_err,
                                                E_B_V=foreground_E_B_V, 
-                                               wavelength=emi_wave.ha_wave* (1+z))
+                                               wavelength=emi_wave.ha_wave* (1+z),
+                                               model='F19')
     
     hb_correct_MW,hb_err_correct_MW = dust_correction(flux=hb, flux_err=hb_err,
                                                E_B_V=foreground_E_B_V, 
-                                               wavelength=emi_wave.hb_wave* (1+z))
+                                               wavelength=emi_wave.hb_wave* (1+z),
+                                               model='F19')
     
     # MW correct for the flux we want to correct
     # assume no error in foreground_E_B_V
     flux_correct_MW,flux_err_correct_MW = dust_correction(flux=flux_obs, flux_err=flux_obs_err,
                                                E_B_V=foreground_E_B_V,
-                                               wavelength=wave* (1+z))
+                                               wavelength=wave* (1+z),
+                                               model='F19')
     
     # E_B_V for the source galaxy
     E_B_V_intrin, E_B_V_intrin_err = E_B_V_with_error(ha=ha_correct_MW, 
                                                       hb=hb_correct_MW, 
                                                       ha_err=ha_err_correct_MW, 
-                                                      hb_err=hb_err_correct_MW)
+                                                      hb_err=hb_err_correct_MW,
+                                                      model=dust_model)
     # k(x) = A(x)/A(V) * R(V)
     # F19.evaluate return A(x)/A(V)
-    ext = F19(Rv=Rv)
-    k_lambda = ext.evaluate(in_x=wave*u.AA, Rv=Rv) * Rv
+    
+    if dust_model=='F19':
+        ext = F19(Rv=Rv)
+        k_lambda = ext.evaluate(in_x=wave*u.AA, Rv=Rv) * Rv
+    elif dust_model=='SMC':
+        ext = G03_SMCBar()
+        k_lambda = ext.evaluate(in_x=wave*u.AA) * Rv
+    elif dust_model=='LMC':
+        ext = G03_LMCAvg()
+        k_lambda = ext.evaluate(in_x=wave*u.AA) * Rv
+    
+    
+    
+    
     
     flux_int = flux_correct_MW * np.power(10,0.4*k_lambda*E_B_V_intrin)
     flux_int_err = np.sqrt((flux_err_correct_MW*np.power(10,0.4*k_lambda*E_B_V_intrin))**2+
@@ -195,7 +228,7 @@ def dust_correction_2d(flux_map, flux_err_map, E_B_V_map, wavelength):
     
     
 
-def dust_correction(flux, flux_err, E_B_V,wavelength):
+def dust_correction(flux, flux_err, E_B_V,wavelength,model='F19'):
     '''
     do the dust correction for a given E(B-V)
     assuming no err in E_B_V
@@ -209,6 +242,8 @@ def dust_correction(flux, flux_err, E_B_V,wavelength):
             E(B-V)
         wavelength: float
             wavelength for the emission line
+        model: str, default is F19
+            option: F19, SMC, LMC
     
     
     
@@ -221,8 +256,12 @@ def dust_correction(flux, flux_err, E_B_V,wavelength):
     flux = flux * u.erg/(u.s * u.cm**2 * u.AA)
     flux_err = flux_err * u.erg/(u.s * u.cm**2 * u.AA)
     wavelength = wavelength * u.AA
-    
-    ext = F19(Rv=3.1)
+    if model=='F19':
+        ext = F19(Rv=3.1)
+    elif model=='SMC':
+        ext = G03_SMCBar()
+    elif model=='LMC':
+        ext = G03_LMCAvg()
     flux_correct = flux / ext.extinguish(wavelength, Ebv=E_B_V)
     flux_err_correct = flux_err / ext.extinguish(wavelength, Ebv=E_B_V)
     flux_correct = flux_correct.value

@@ -32,6 +32,11 @@ import astropy.cosmology.units as cu
 from dust_extinction.parameter_averages import F19
 from scipy.optimize import curve_fit
 from metal_uncertainty import intrinsic_flux_with_err
+import matplotlib.image as mpimg
+import matplotlib.gridspec as gridspec
+from mpl_toolkits.axes_grid1.inset_locator import inset_axes
+from matplotlib.ticker import FormatStrFormatter
+from matplotlib.ticker import FuncFormatter
 
 def plot_oii_gradient(post_b3d,global_param,x_cen_pix,y_cen_pix,ellip,ax,
                       label=None,plot_data=False):
@@ -434,6 +439,35 @@ class cmap:
     v = 'RdYlBu_r'
     vdisp = 'YlOrBr'
     residuals = 'RdYlBu_r'
+    
+def get_e_b_v(ha_map,hb_map,foreground_E_B_V,z):
+    # dust correction
+    
+    # oii hb ha nii
+    # [3727.092,3729.875] 4862.683 6564.61 [6549.85, 6585.28]
+    
+    # oii_sum hb ha nii6585
+    # 3728.4835 4862.683 6564.61 6585.28
+    oii_wave = 3728.4835
+    hb_wave = 4862.683
+    ha_wave = 6564.61
+    nii_wave = 6585.28
+    wavelengths_restframe = np.array([oii_wave,hb_wave,ha_wave,nii_wave])*u.AA
+    wavelengths_redshift = wavelengths_restframe * (1+z)
+    
+    ha_correct_MW = dust_correction(flux=ha_map, 
+                                               E_B_V=foreground_E_B_V, 
+                                               wavelength=ha_wave* (1+z))
+    
+    hb_correct_MW = dust_correction(flux=hb_map, 
+                                               E_B_V=foreground_E_B_V, 
+                                               wavelength=hb_wave* (1+z))
+    E_44_55 = 2.5/1.16 * np.log10(ha_correct_MW/hb_correct_MW/2.86) # eq 10 in Fitzpatrick+19
+    E_B_V_intrin = E_44_55 * 0.976 # based on table 4 in Fitzpatrick+19, assuming E(44-55)=0.5, RV=3.1
+    
+    return E_B_V_intrin
+    
+    
 
 def get_metal_map_n2o2(ha_map,hb_map,oii_map,nii_map,
                                  ha_sn,hb_sn,oii_sn,nii_sn,foreground_E_B_V,
@@ -870,7 +904,8 @@ def diagnostic_map_gist_dustc(ha_map,hb_map,oii_map,nii_map,
                                  savecsv=False,csvpath=None,
                                  nii_sn_cut=3,model_flux_sn=False,
                                  radius_fill_perc=0.5,
-                                 bin_size=1,r_min_set_force=None):
+                                 bin_size=1,r_min_set_force=None,
+                                 dust_model='F19'):
     
     
     '''
@@ -891,6 +926,8 @@ def diagnostic_map_gist_dustc(ha_map,hb_map,oii_map,nii_map,
             take pa in the unit of radian, so I add degree->rad conversion.
     update 2 May 2025:
         1. r_min_set_force: int, force the code to fit the first N datapoints
+    update 21 July 2025:
+        dust_model option, F19, SMC, LMC. default is F19
     '''
     
     ha_sn_model = ha_map/ha_err
@@ -1036,7 +1073,8 @@ def diagnostic_map_gist_dustc(ha_map,hb_map,oii_map,nii_map,
                                                      wave=emi_wave.nii_wave,
                                                      ha=ha_gist,hb=hb_gist,
                                                      ha_err=ha_gist_err,hb_err=hb_gist_err,
-                                foreground_E_B_V=foreground_E_B_V,z=z)
+                                foreground_E_B_V=foreground_E_B_V,z=z,
+                                dust_model=dust_model)
     
     # OII correct 
     
@@ -1045,7 +1083,8 @@ def diagnostic_map_gist_dustc(ha_map,hb_map,oii_map,nii_map,
                                                      wave=emi_wave.oii_wave,
                                                      ha=ha_gist,hb=hb_gist,
                                                      ha_err=ha_gist_err,hb_err=hb_gist_err,
-                                foreground_E_B_V=foreground_E_B_V,z=z)
+                                foreground_E_B_V=foreground_E_B_V,z=z,
+                                dust_model=dust_model)
     
     logR_map = np.log10(nii_corr/oii_corr)
     metal_map_n2o2_gistdust = metal_k19(logR_map)
@@ -1536,7 +1575,7 @@ def axplot_bin_metal_with_err(ax,metal_map,metal_err_map,ha_map,radius_map,
     
     
     if legend:
-        ax.legend(prop={'size': 12})
+        ax.legend(prop={'size': 14})
     ax.set_xlabel('radius [kpc]')
     ax.set_ylabel('12+log(O/H)')
     ax.set_title(title)
@@ -4026,7 +4065,7 @@ def paper_metal_gradient_spaxelave(ha_map,hb_map,oii_map,nii_map,
                                  ha_gist_err,hb_gist_err,oii_gist_err,nii_gist_err,
                                  pa,x_cen_pix,y_cen_pix,ellip,
                                  foreground_E_B_V,
-                                 z,img_extent,
+                                 z,img_extent,white_light_img_path,
                                  re_kpc=None,savepath=None,
                                  r_option='kpc',plot_title=None,
                                  limit_metal_range=False,
@@ -4034,7 +4073,8 @@ def paper_metal_gradient_spaxelave(ha_map,hb_map,oii_map,nii_map,
                                  nii_sn_cut=None,model_flux_sn=False,
                                  sumflux_radius_fill_perc=0.5,
                                  indvspax_radius_fill_perc=0.5,fit_param=True,
-                                 bin_size=1,r_min_spax=None):
+                                 bin_size=1,r_min_spax=None,colorbar_xpos=-0.08,
+                                 set_cb_ticks=None):
     '''
     ha_map: flux map from b3d
     ha_sn: flux/err from gist
@@ -4047,7 +4087,9 @@ def paper_metal_gradient_spaxelave(ha_map,hb_map,oii_map,nii_map,
         make nii sn cut on the sum flux method
     16 May 2025 update:
         this version only include metallicity map and spaxel ave plot
-
+    22 July 2025 update:
+        colorbar_xpos: set the x pos of colorbar
+        set_cb_ticks: mannually set the colorbar ticks
     
     '''
     # balmer decrement of GIST
@@ -4353,9 +4395,58 @@ def paper_metal_gradient_spaxelave(ha_map,hb_map,oii_map,nii_map,
     
     #r_min_spax = np.min([r_min_spax_n2ha,r_min_spax_n2o2])
     
-    fig, ax = plt.subplots(2,2,figsize=(15,12), 
-                           gridspec_kw={'wspace':0.5,'hspace':0.35})
+    fig, ax = plt.subplots(2,3,figsize=(22,12),gridspec_kw={'hspace':0.3}) 
+                           #gridspec_kw={'wspace':0.5,'hspace':0.35})
+    #formatter = FuncFormatter(one_decimal)
     ax = ax.ravel()
+    
+    # Get original positions
+    pos0 = ax[0].get_position()
+    pos1 = ax[1].get_position()
+    pos2 = ax[2].get_position()
+    
+    # Row 0: move ax[1] left, and ax[2] to follow it
+    ax[1].set_position([
+        pos0.x1 + 0.05,
+        pos1.y0,
+        pos1.width,
+        pos1.height
+    ])
+    ax[2].set_position([
+        pos0.x1 + 0.05 + pos1.width + 0.05,
+        pos2.y0,
+        pos2.width,
+        pos2.height
+    ])
+    
+    # Row 1: same for ax[3], ax[4], ax[5]
+    pos3 = ax[3].get_position()
+    pos4 = ax[4].get_position()
+    pos5 = ax[5].get_position()
+    
+    ax[4].set_position([
+        pos3.x1 + 0.05,
+        pos4.y0,
+        pos4.width,
+        pos4.height
+    ])
+    ax[5].set_position([
+        pos3.x1 + 0.05 + pos4.width + 0.05,
+        pos5.y0,
+        pos5.width,
+        pos5.height
+    ])
+
+    
+    
+    
+    
+    
+    img = mpimg.imread(white_light_img_path)
+    ax[0].imshow(img)
+    ax[0].axis('off')
+    ax[3].axis('off')
+    
         
     ##############################
     # N2O2 metallicity map with dust correction
@@ -4363,16 +4454,30 @@ def paper_metal_gradient_spaxelave(ha_map,hb_map,oii_map,nii_map,
     clim = map_limits(metal_map_n2o2_gistdust,pct=90)
     norm = mpl.colors.Normalize(vmin=clim[0], vmax=clim[1])
     
-    im0 = ax[0].imshow(metal_map_n2o2_gistdust,extent=img_extent,
+    im0 = ax[1].imshow(metal_map_n2o2_gistdust,extent=img_extent,
                         origin='lower',
                         interpolation='nearest',
                         norm=norm,
                         cmap=cmap.flux)
-    cb0 = plt.colorbar(im0,ax=ax[0],fraction=0.047)
-    cb0.set_label(label='12+log(O/H)',fontsize=20)
-    ax[0].set_title('N2O2')
-    ax[0].set_xlabel(r'$\Delta$RA(")')
-    ax[0].set_ylabel(r'$\Delta$Dec(")')
+    #cb0 = plt.colorbar(im0,ax=ax[1],fraction=0.047)
+    #cb0.set_label(label='12+log(O/H)',fontsize=20)
+    
+    # Add colorbar inside the image
+    cax0 = inset_axes(ax[1], width="5%", height="40%", loc='upper right', 
+                     bbox_to_anchor=(colorbar_xpos, 0.0, 1, 1),
+                     bbox_transform=ax[1].transAxes, borderpad=0)
+    
+    cb0 = fig.colorbar(im0, cax=cax0)
+    #cb0.set_label(label='12+log(O/H)',fontsize=12)
+    cb0.ax.tick_params(labelsize=12)
+    #cb0.ax.yaxis.set_major_formatter(formatter)  # force one decimal place
+
+    
+    ax[1].set_title('N2O2')
+    
+    
+    ax[1].set_xlabel(r'$\Delta$RA(")')
+    ax[1].set_ylabel(r'$\Delta$Dec(")')
     #ax[0].set_ylabel('N2O2')
     
     
@@ -4382,21 +4487,21 @@ def paper_metal_gradient_spaxelave(ha_map,hb_map,oii_map,nii_map,
     y = np.linspace(img_extent[2], img_extent[3], ny)
     X, Y = np.meshgrid(x, y)
     
-    ax[0].contour(X,Y, radius_re, levels=[0.5], colors='r', linewidths=2, linestyles='solid',label='0.5 R$_\mathrm{e}$')
-    ax[0].contour(X,Y, radius_re, levels=[1], colors='darkseagreen', linewidths=2, linestyles='dashed',label='1 R$_\mathrm{e}$')
-    ax[0].contour(X,Y, radius_re, levels=[1.5], colors='steelblue', linewidths=2, linestyles='-.',label='1.5 R$_\mathrm{e}$')
+    ax[1].contour(X,Y, radius_re, levels=[0.5], colors='r', linewidths=2, linestyles='solid',label='0.5 R$_\mathrm{e}$')
+    ax[1].contour(X,Y, radius_re, levels=[1], colors='darkseagreen', linewidths=2, linestyles='dashed',label='1 R$_\mathrm{e}$')
+    ax[1].contour(X,Y, radius_re, levels=[1.5], colors='steelblue', linewidths=2, linestyles='-.',label='1.5 R$_\mathrm{e}$')
     
-    x_real = x_cen_pix / nx * (img_extent[1] - img_extent[0]) + 1.5*img_extent[0]
-    y_real = y_cen_pix / ny * (img_extent[3] - img_extent[2]) + 1.5*img_extent[2]
+    x_real = x_cen_pix / nx * (img_extent[1] - img_extent[0]) + 1*img_extent[0]
+    y_real = y_cen_pix / ny * (img_extent[3] - img_extent[2]) + 1*img_extent[2]
     
-    ax[0].scatter(x_real,y_real,c='gold',marker='x')
+    #ax[1].scatter(x_real,y_real,c='gold',marker='x')
     
     linestylelist=['solid','dashed','-.']
     colorlist=['r','darkseagreen','steelblue']
     label_column=['0.5 R$_\mathrm{e}$','1 R$_\mathrm{e}$','1.5 R$_\mathrm{e}$']
-    columns = [ax[0].plot([], [], c=colorlist[i],linestyle=linestylelist[i])[0] for i in range(3)]
+    columns = [ax[1].plot([], [], c=colorlist[i],linestyle=linestylelist[i])[0] for i in range(3)]
 
-    ax[0].legend( columns,  label_column,loc='lower right', prop={'size': 12})
+    ax[1].legend( columns,  label_column,loc='lower right', prop={'size': 14})
     
     
     #### gradient n2o2 with dust corr
@@ -4414,7 +4519,7 @@ def paper_metal_gradient_spaxelave(ha_map,hb_map,oii_map,nii_map,
     #                         radius_array=fit_radius_array[:r_min],fit_param=fit_param,
     #                         color='sienna')
     
-    axplot_bin_metal_with_err(ax=ax[1],metal_map=metal_map_n2o2_gistdust,
+    axplot_bin_metal_with_err(ax=ax[2],metal_map=metal_map_n2o2_gistdust,
                               metal_err_map=metal_err_withdust,
                      ha_map=ha_map,radius_map=radius_kpc,re_kpc=re_kpc,
                      title=None,R='N2O2',plot_indivspax=True,
@@ -4428,22 +4533,34 @@ def paper_metal_gradient_spaxelave(ha_map,hb_map,oii_map,nii_map,
     clim = map_limits(metal_map_n2ha,pct=90)
     norm = mpl.colors.Normalize(vmin=clim[0], vmax=clim[1])
     
-    im3 = ax[2].imshow(metal_map_n2ha,extent=img_extent,
+    im3 = ax[4].imshow(metal_map_n2ha,extent=img_extent,
                         origin='lower',
                         interpolation='nearest',
                         norm=norm,
                         cmap=cmap.flux)
-    cb3 = plt.colorbar(im3,ax=ax[2],fraction=0.047)
-    cb3.set_label(label='12+log(O/H)',fontsize=20)
-    #ax[3].set_title('metallicity map')
-    ax[2].set_xlabel(r'$\Delta$RA(")')
-    ax[2].set_ylabel(r'$\Delta$Dec(")')
-    ax[2].set_title('N2H$\\alpha$')
+    #cb3 = plt.colorbar(im3,ax=ax[4],fraction=0.047)
+    #cb3.set_label(label='12+log(O/H)',fontsize=20)
+    # Add colorbar inside the image
+    cax3 = inset_axes(ax[4], width="5%", height="40%", loc='upper right', 
+                     bbox_to_anchor=(colorbar_xpos, 0.0, 1, 1),
+                     bbox_transform=ax[4].transAxes, borderpad=0)
     
-    ax[2].contour(X,Y, radius_re, levels=[0.5], colors='r', linewidths=2, linestyles='solid')
-    ax[2].contour(X,Y, radius_re, levels=[1], colors='darkseagreen', linewidths=2, linestyles='dashed')
-    ax[2].contour(X,Y, radius_re, levels=[1.5], colors='steelblue', linewidths=2, linestyles='-.')
-    ax[2].scatter(x_real,y_real,c='gold',marker='x')
+    cb3 = fig.colorbar(im3, cax=cax3)
+    #cb3.set_label(label='12+log(O/H)',fontsize=12)
+    cb3.ax.tick_params(labelsize=12)
+    #cb3.ax.yaxis.set_major_formatter(formatter)  # force one decimal place
+    if set_cb_ticks is not None:
+        cb3.set_ticks(set_cb_ticks)
+    
+    #ax[3].set_title('metallicity map')
+    ax[4].set_xlabel(r'$\Delta$RA(")')
+    ax[4].set_ylabel(r'$\Delta$Dec(")')
+    ax[4].set_title('N2H$\\alpha$')
+    
+    ax[4].contour(X,Y, radius_re, levels=[0.5], colors='r', linewidths=2, linestyles='solid')
+    ax[4].contour(X,Y, radius_re, levels=[1], colors='darkseagreen', linewidths=2, linestyles='dashed')
+    ax[4].contour(X,Y, radius_re, levels=[1.5], colors='steelblue', linewidths=2, linestyles='-.')
+    #ax[4].scatter(x_real,y_real,c='gold',marker='x')
     
     
     
@@ -4461,19 +4578,23 @@ def paper_metal_gradient_spaxelave(ha_map,hb_map,oii_map,nii_map,
     #                         radius_array=fit_radius_array[:r_min],R='N2Ha',
     #                         fit_param=fit_param,color='sienna')
     
-    axplot_bin_metal_with_err(ax=ax[3],metal_map=metal_map_n2ha,
+    axplot_bin_metal_with_err(ax=ax[5],metal_map=metal_map_n2ha,
                               metal_err_map=metal_err_n2ha,
                      ha_map=ha_map,radius_map=radius_kpc,re_kpc=re_kpc,
                      title=None,R='N2Ha',plot_indivspax=True,
                      radius_fill_perc=indvspax_radius_fill_perc,
                      fit_param=fit_param,r_min_set=r_min_spax,bin_size=bin_size)
     
-    fig.suptitle(plot_title)
+    if plot_title is not None:
+        ax[0].set_title(plot_title)
+    #plt.tight_layout()
     if savepath is not None:
         plt.savefig(savepath,dpi=300,bbox_inches='tight')
     
     plt.show()
 
+def one_decimal(x, pos):
+    return f"{x:.1f}"
 
 def paperplot_data_sumflux_all(datapath,id_list,color='b',savepath=None):
     
