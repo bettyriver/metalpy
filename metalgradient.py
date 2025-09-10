@@ -1582,7 +1582,7 @@ def axplot_bin_metal_with_err(ax,metal_map,metal_err_map,ha_map,radius_map,
     ax.set_ylim(7.0,9.3)
     ax.set_xlim(left=0)
     ax.axvline(x=re_kpc,ymin=0,ymax=1,
-            linestyle='--',c='darkseagreen')
+            linestyle='--',c='darkgreen')
     if R=='N2O2':
         ax.axhline(y=9.23,xmin=0,xmax=1,linestyle='--',c='silver')
         ax.axhline(y=7.63,xmin=0,xmax=1,linestyle='--',c='silver')
@@ -4074,7 +4074,8 @@ def paper_metal_gradient_spaxelave(ha_map,hb_map,oii_map,nii_map,
                                  sumflux_radius_fill_perc=0.5,
                                  indvspax_radius_fill_perc=0.5,fit_param=True,
                                  bin_size=1,r_min_spax=None,colorbar_xpos=-0.08,
-                                 set_cb_ticks=None):
+                                 set_cb_ticks=None,cmap_set='inferno',
+                                 set_cb_range=None):
     '''
     ha_map: flux map from b3d
     ha_sn: flux/err from gist
@@ -4458,7 +4459,7 @@ def paper_metal_gradient_spaxelave(ha_map,hb_map,oii_map,nii_map,
                         origin='lower',
                         interpolation='nearest',
                         norm=norm,
-                        cmap=cmap.flux)
+                        cmap=cmap_set)
     #cb0 = plt.colorbar(im0,ax=ax[1],fraction=0.047)
     #cb0.set_label(label='12+log(O/H)',fontsize=20)
     
@@ -4471,7 +4472,8 @@ def paper_metal_gradient_spaxelave(ha_map,hb_map,oii_map,nii_map,
     #cb0.set_label(label='12+log(O/H)',fontsize=12)
     cb0.ax.tick_params(labelsize=12)
     #cb0.ax.yaxis.set_major_formatter(formatter)  # force one decimal place
-
+    if set_cb_range is not None:
+        im0.set_clim(set_cb_range)
     
     ax[1].set_title('N2O2')
     
@@ -4487,9 +4489,9 @@ def paper_metal_gradient_spaxelave(ha_map,hb_map,oii_map,nii_map,
     y = np.linspace(img_extent[2], img_extent[3], ny)
     X, Y = np.meshgrid(x, y)
     
-    ax[1].contour(X,Y, radius_re, levels=[0.5], colors='r', linewidths=2, linestyles='solid',label='0.5 R$_\mathrm{e}$')
-    ax[1].contour(X,Y, radius_re, levels=[1], colors='darkseagreen', linewidths=2, linestyles='dashed',label='1 R$_\mathrm{e}$')
-    ax[1].contour(X,Y, radius_re, levels=[1.5], colors='steelblue', linewidths=2, linestyles='-.',label='1.5 R$_\mathrm{e}$')
+    ax[1].contour(X,Y, radius_re, levels=[0.5], colors='r', linewidths=2.5, linestyles='solid',label='0.5 R$_\mathrm{e}$')
+    ax[1].contour(X,Y, radius_re, levels=[1], colors='darkgreen', linewidths=2.5, linestyles='dashed',label='1 R$_\mathrm{e}$')
+    ax[1].contour(X,Y, radius_re, levels=[1.5], colors='steelblue', linewidths=2.5, linestyles='-.',label='1.5 R$_\mathrm{e}$')
     
     x_real = x_cen_pix / nx * (img_extent[1] - img_extent[0]) + 1*img_extent[0]
     y_real = y_cen_pix / ny * (img_extent[3] - img_extent[2]) + 1*img_extent[2]
@@ -4497,7 +4499,7 @@ def paper_metal_gradient_spaxelave(ha_map,hb_map,oii_map,nii_map,
     #ax[1].scatter(x_real,y_real,c='gold',marker='x')
     
     linestylelist=['solid','dashed','-.']
-    colorlist=['r','darkseagreen','steelblue']
+    colorlist=['r','darkgreen','steelblue']
     label_column=['0.5 R$_\mathrm{e}$','1 R$_\mathrm{e}$','1.5 R$_\mathrm{e}$']
     columns = [ax[1].plot([], [], c=colorlist[i],linestyle=linestylelist[i])[0] for i in range(3)]
 
@@ -4537,7 +4539,7 @@ def paper_metal_gradient_spaxelave(ha_map,hb_map,oii_map,nii_map,
                         origin='lower',
                         interpolation='nearest',
                         norm=norm,
-                        cmap=cmap.flux)
+                        cmap=cmap_set)
     #cb3 = plt.colorbar(im3,ax=ax[4],fraction=0.047)
     #cb3.set_label(label='12+log(O/H)',fontsize=20)
     # Add colorbar inside the image
@@ -4551,15 +4553,17 @@ def paper_metal_gradient_spaxelave(ha_map,hb_map,oii_map,nii_map,
     #cb3.ax.yaxis.set_major_formatter(formatter)  # force one decimal place
     if set_cb_ticks is not None:
         cb3.set_ticks(set_cb_ticks)
+    if set_cb_range is not None:
+        im3.set_clim(set_cb_range)
     
     #ax[3].set_title('metallicity map')
     ax[4].set_xlabel(r'$\Delta$RA(")')
     ax[4].set_ylabel(r'$\Delta$Dec(")')
     ax[4].set_title('N2H$\\alpha$')
     
-    ax[4].contour(X,Y, radius_re, levels=[0.5], colors='r', linewidths=2, linestyles='solid')
-    ax[4].contour(X,Y, radius_re, levels=[1], colors='darkseagreen', linewidths=2, linestyles='dashed')
-    ax[4].contour(X,Y, radius_re, levels=[1.5], colors='steelblue', linewidths=2, linestyles='-.')
+    ax[4].contour(X,Y, radius_re, levels=[0.5], colors='r', linewidths=2.5, linestyles='solid')
+    ax[4].contour(X,Y, radius_re, levels=[1], colors='darkgreen', linewidths=2.5, linestyles='dashed')
+    ax[4].contour(X,Y, radius_re, levels=[1.5], colors='steelblue', linewidths=2.5, linestyles='-.')
     #ax[4].scatter(x_real,y_real,c='gold',marker='x')
     
     
